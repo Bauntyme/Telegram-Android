@@ -2745,8 +2745,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     }
                     req.random_id = randomIds;
                     req.id = ids;
-                    req.drop_author = forwardFromMyName;
-                    req.drop_media_captions = hideCaption;
+                    req.drop_author = forwardFromMyName || AeroConfig.forwardWithoutAuthor;
+                    req.drop_media_captions = hideCaption || AeroConfig.forwardWithoutCaption;
                     req.with_my_score = messages.size() == 1 && messages.get(0).messageOwner.with_my_score;
                     req.from_ephemeral = fwdEphemeral;
                     if (video_timestamp >= 0) {
@@ -4498,6 +4498,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
         if (peer == 0) {
             return;
+        }
+        if (AeroConfig.ghostDontReadMessages && AeroConfig.ghostReadOnInteract) {
+            getMessagesController().forceAeroMarkDialogReadNow(peer);
         }
         if (richMessage != null && DialogObject.isEncryptedDialog(peer)) {
             return;

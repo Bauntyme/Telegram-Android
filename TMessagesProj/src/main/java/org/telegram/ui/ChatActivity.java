@@ -142,6 +142,8 @@ import com.google.zxing.common.detector.MathUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AeroConfig;
+import org.telegram.messenger.AeroDeletedStore;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BotForumHelper;
@@ -27142,6 +27144,26 @@ public class ChatActivity extends BaseFragment implements
                 return;
             }
         } else if (channelId != 0) {
+            return;
+        }
+        if (!sent && AeroConfig.saveDeletedMessages) {
+            boolean refreshedAny = false;
+            for (int a = 0, count = markAsDeletedMessages.size(); a < count; a++) {
+                Integer mid = markAsDeletedMessages.get(a);
+                if (mid == null) continue;
+                MessageObject obj = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
+                    ? filteredMessagesDict.get(mid)
+                    : messagesDict[loadIndex].get(mid);
+                if (obj != null) {
+                    obj.deleted = true;
+                    obj.resetLayout();
+                    AeroDeletedStore.markDeleted(currentAccount, obj.getDialogId(), obj.getId());
+                    refreshedAny = true;
+                }
+            }
+            if (refreshedAny) {
+                updateVisibleRows();
+            }
             return;
         }
         if (replyingMessageObject != null && markAsDeletedMessages.contains(replyingMessageObject.getId())) {

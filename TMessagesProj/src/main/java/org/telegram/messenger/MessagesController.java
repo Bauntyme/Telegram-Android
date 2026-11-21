@@ -10553,7 +10553,7 @@ public class MessagesController extends BaseController implements NotificationCe
         checkReadTasks();
 
         if (getUserConfig().isClientActivated()) {
-            if (!ignoreSetOnline && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
+            if (!ignoreSetOnline && !AeroConfig.ghostStayOffline && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
                 if (ApplicationLoader.mainInterfacePausedStageQueueTime != 0 && Math.abs(ApplicationLoader.mainInterfacePausedStageQueueTime - System.currentTimeMillis()) > 1000) {
                     if (statusSettingState != 1 && (lastStatusUpdateTime == 0 || Math.abs(System.currentTimeMillis() - lastStatusUpdateTime) >= 55000 || offlineSent)) {
                         statusSettingState = 1;
@@ -11412,6 +11412,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean sendTyping(long dialogId, long threadMsgId, int action, String emojicon, int classGuid) {
+        if (AeroConfig.ghostDontSendTyping && action != 2) {
+            return false;
+        }
         if (action < 0 || action >= sendingTypings.length || dialogId == 0) {
             return false;
         }
@@ -14592,7 +14595,34 @@ public class MessagesController extends BaseController implements NotificationCe
         }
     }
 
+    private volatile boolean aeroForceNextReadTask = false;
+
+    public void forceAeroMarkDialogReadNow(long dialogId) {
+        if (dialogId == 0) {
+            return;
+        }
+        TLRPC.Dialog dialog = dialogs_dict.get(dialogId);
+        int topMsg = dialog != null ? dialog.top_message : 0;
+        if (topMsg <= 0) {
+            ArrayList<MessageObject> list = dialogMessage.get(dialogId);
+            if (list != null && !list.isEmpty()) {
+                topMsg = list.get(0).getId();
+            }
+        }
+        if (topMsg > 0) {
+            aeroForceNextReadTask = true;
+            try {
+                markDialogAsRead(dialogId, topMsg, Integer.MAX_VALUE, 0, false, 0, 0, true, 0);
+            } finally {
+                aeroForceNextReadTask = false;
+            }
+        }
+    }
+
     private void completeReadTask(ReadTask task) {
+        if (AeroConfig.ghostDontReadMessages && !aeroForceNextReadTask) {
+            return;
+        }
         if (task.replyId != 0 && task.monoForumPeerId == 0) {
             TLRPC.TL_messages_readDiscussion req = new TLRPC.TL_messages_readDiscussion();
             req.msg_id = (int) task.replyId;
@@ -21211,6 +21241,9 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (arrayList == null) {
                         continue;
                     }
+                    if (AeroConfig.saveDeletedMessages) {
+                        AeroDeletedStore.markDeleted(currentAccount, dialogId, arrayList);
+                    }
                     getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
                     if (dialogId == 0) {
                         for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
@@ -21221,6 +21254,9 @@ public class MessagesController extends BaseController implements NotificationCe
                                     FileLog.d("mark messages " + obj.getId() + " deleted");
                                 }
                                 obj.deleted = true;
+                                if (AeroConfig.saveDeletedMessages) {
+                                    AeroDeletedStore.markDeleted(currentAccount, obj.getDialogId(), obj.getId());
+                                }
                             }
                         }
                     } else {
@@ -21324,7 +21360,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 getMessagesStorage().markMessagesContentAsRead(key, arrayList, currentTime2, markContentAsReadMessagesDate);
             }
         }
-        if (deletedMessages != null) {
+        if (deletedMessages != null && !AeroConfig.saveDeletedMessages) {
             for (int a = 0, size = deletedMessages.size(); a < size; a++) {
                 long key = deletedMessages.keyAt(a);
                 ArrayList<Integer> arrayList = deletedMessages.valueAt(a);

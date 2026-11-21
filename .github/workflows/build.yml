@@ -1,0 +1,62 @@
+name: Build AeroGram Android APK
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-aerogram:
+    name: Build AeroGram Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Free Runner Disk Space
+        uses: jlumbroso/free-disk-space@v1
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+
+      - name: Checkout AeroGram with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Android SDK, NDK 27.2 & CMake 3.22.1
+        uses: android-actions/setup-android@v3
+
+      - name: Install Native Build Packages
+        run: |
+          SDKMGR="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | sudo "$SDKMGR" --licenses >/dev/null || true
+          yes | sudo "$SDKMGR" --install \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+
+      - name: Grant Gradle Wrapper Permissions
+        run: chmod +x gradlew
+
+      - name: Compile AeroGram Release APK
+        run: |
+          ./gradlew :TMessagesProj_App:assembleAfatRelease --no-daemon --max-workers=2 --stacktrace
+
+      - name: Upload AeroGram APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AeroGram-APK
+          path: TMessagesProj_App/build/outputs/apk/**/*.apk

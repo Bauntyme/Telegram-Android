@@ -103,6 +103,8 @@ import androidx.core.math.MathUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AeroConfig;
+import org.telegram.messenger.AeroDeletedStore;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AppGlobalConfig;
 import org.telegram.messenger.ApplicationLoader;
@@ -15564,18 +15566,21 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             return "";
         } else if (current.scheduled && current.messageOwner.date == 0x7FFFFFFE) {
             return "";
-        } else if (current.realDate != 0) {
-            return LocaleController.formatSmallDateChat(current.realDate) + ", " + LocaleController.getInstance().getFormatterDay().format((long) (current.realDate) * 1000);
+        }
+        String baseTime;
+        if (current.realDate != 0) {
+            baseTime = LocaleController.formatSmallDateChat(current.realDate) + ", " + (AeroConfig.showSecondsInTime ? LocaleController.getInstance().getFormatterDayWithSeconds() : LocaleController.getInstance().getFormatterDay()).format((long) (current.realDate) * 1000);
         } else if (current.isRepostPreview) {
-            return LocaleController.formatSmallDateChat(message.messageOwner.date) + ", " + LocaleController.getInstance().getFormatterDay().format((long) (message.messageOwner.date) * 1000);
+            baseTime = LocaleController.formatSmallDateChat(message.messageOwner.date) + ", " + (AeroConfig.showSecondsInTime ? LocaleController.getInstance().getFormatterDayWithSeconds() : LocaleController.getInstance().getFormatterDay()).format((long) (message.messageOwner.date) * 1000);
         } else if (edited) {
             if (AppGlobalConfig.getInstance(current.currentAccount).messagePrimaryEditedDate.get()) {
                 if (editDate == 0 && current.isEditing()) {
                     editDate = ConnectionsManager.getInstance(current.currentAccount).getCurrentTime();
                 }
-                return LocaleController.formatPmEditedDate(editDate);
+                baseTime = LocaleController.formatPmEditedDate(editDate);
+            } else {
+                baseTime = getString(R.string.EditedMessage) + " " + (AeroConfig.showSecondsInTime ? LocaleController.getInstance().getFormatterDayWithSeconds() : LocaleController.getInstance().getFormatterDay()).format((long) (message.messageOwner.date) * 1000);
             }
-            return getString(R.string.EditedMessage) + " " + LocaleController.getInstance().getFormatterDay().format((long) (message.messageOwner.date) * 1000);
         } else if (current.isSaved && current.messageOwner.fwd_from != null && (current.messageOwner.fwd_from.date != 0 || current.messageOwner.fwd_from.saved_date != 0)
                 // A widget keeps its time alone in Saved Messages: the pill over its corner stays short.
                 && !(MessageObject.getMedia(current.messageOwner) instanceof TLRPC.TL_messageMediaWidget)) {
@@ -15583,9 +15588,14 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             if (date == 0) {
                 date = current.messageOwner.fwd_from.date;
             }
-            return LocaleController.formatSeenDate(date);
+            baseTime = LocaleController.formatSeenDate(date);
+        } else {
+            baseTime = (AeroConfig.showSecondsInTime ? LocaleController.getInstance().getFormatterDayWithSeconds() : LocaleController.getInstance().getFormatterDay()).format((long) (message.messageOwner.date) * 1000);
         }
-        return LocaleController.getInstance().getFormatterDay().format((long) (message.messageOwner.date) * 1000);
+        if (AeroConfig.saveDeletedMessages && (current.deleted || AeroDeletedStore.isDeleted(current.currentAccount, current.getDialogId(), current.getId()))) {
+            return "O‘chirilgan • " + baseTime;
+        }
+        return baseTime;
     }
 
     void measureTime(MessageObject messageObject) {
