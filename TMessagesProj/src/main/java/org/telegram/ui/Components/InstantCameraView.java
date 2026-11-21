@@ -70,6 +70,7 @@ import androidx.core.graphics.ColorUtils;
 
 import androidx.media3.exoplayer.ExoPlayer;
 
+import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AutoDeleteMediaTask;
@@ -334,6 +335,17 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         switchCameraButton.setScaleType(ImageView.ScaleType.CENTER);
         switchCameraButton.setContentDescription(LocaleController.getString(R.string.AccDescrSwitchCamera));
         buttonsLayout.addView(switchCameraButton, LayoutHelper.createLinear(44, 44));
+        switchCameraButton.setOnLongClickListener(v -> {
+            if (!AeroConfig.cameraSwitchOnHold || !cameraReady || !isCameraSessionInitiated()) {
+                return false;
+            }
+            org.telegram.ui.AeroUiHelper.showCameraChoiceDialog(getContext(), () -> {
+                if (isFrontface == AeroConfig.preferBackCamera) {
+                    switchCamera();
+                }
+            });
+            return true;
+        });
         switchCameraButton.setOnClickListener(v -> {
             if (!cameraReady || !isCameraSessionInitiated() || cameraThread == null) {
                 return;
@@ -736,7 +748,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         cameraReady = false;
         selectedCamera = null;
         if (!fromPaused) {
-            if (!useCamera2) {
+            if (AeroConfig.cameraSwitchOnHold) {
+                isFrontface = !AeroConfig.preferBackCamera;
+            } else if (!useCamera2) {
                 isFrontface = true;
             }
             updateFlash();
@@ -1166,6 +1180,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
         }
         isFrontface = !isFrontface;
+        if (AeroConfig.cameraSwitchOnHold) {
+            AeroConfig.preferBackCamera = !isFrontface;
+            AeroConfig.saveBool("preferBackCamera", AeroConfig.preferBackCamera);
+        }
         updateFlash();
         if (useCamera2) {
             if (bothCameras) {

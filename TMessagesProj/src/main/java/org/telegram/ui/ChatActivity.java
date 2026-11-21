@@ -1298,6 +1298,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_VIEW_STATISTICS = 115;
     public final static int OPTION_WELCOME_REVERT = 116;
     public final static int OPTION_SEND_MONEY = 117;
+    public final static int OPTION_EDIT_HISTORY = 118;
     public final static int OPTION_STOP_LIVE_LOCATION = 118;
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
@@ -1700,6 +1701,8 @@ public class ChatActivity extends BaseFragment implements
     private final static int bot_settings = 31;
     private final static int call = 32;
     private final static int video_call = 33;
+    private final static int aero_jump_first = 901;
+    private final static int aero_channel_history = 902;
 
     private final static int attach_photo = 0;
     private final static int attach_gallery = 1;
@@ -3999,7 +4002,18 @@ public class ChatActivity extends BaseFragment implements
                     }
                 } else if (id == call || id == video_call) {
                     if (currentUser != null && getParentActivity() != null) {
-                        VoIPHelper.startCall(currentUser, id == video_call, userInfo != null && userInfo.video_calls_available, getParentActivity(), getMessagesController().getUserFull(currentUser.id), getAccountInstance());
+                        AeroUiHelper.confirmAndStartCall(
+                            getParentActivity(),
+                            UserObject.getUserName(currentUser),
+                            id == video_call,
+                            () -> VoIPHelper.startCall(currentUser, id == video_call, userInfo != null && userInfo.video_calls_available, getParentActivity(), getMessagesController().getUserFull(currentUser.id), getAccountInstance())
+                        );
+                    }
+                } else if (id == aero_jump_first) {
+                    scrollToMessageId(1, 0, true, 0, true, 0);
+                } else if (id == aero_channel_history) {
+                    if (currentChat != null) {
+                        presentFragment(new ChannelAdminLogActivity(currentChat));
                     }
                 } else if (id == change_colors) {
                     showChatThemeBottomSheet();
@@ -4399,6 +4413,12 @@ public class ChatActivity extends BaseFragment implements
 
             if (searchItem != null) {
                 headerItem.lazilyAddSubItem(search, R.drawable.msg_search, LocaleController.getString(R.string.Search));
+            }
+            if (AeroConfig.jumpToFirstMessageButton) {
+                headerItem.lazilyAddSubItem(aero_jump_first, R.drawable.msg_go_up, "Birinchi xabarga o‘tish");
+            }
+            if (AeroConfig.channelHistoryButton && currentChat != null && ChatObject.isChannel(currentChat) && ChatObject.hasAdminRights(currentChat)) {
+                headerItem.lazilyAddSubItem(aero_channel_history, R.drawable.msg_recent, "Kanal tarixi (Recent Actions)");
             }
             if (ChatObject.isBoostSupported(currentChat) && (getUserConfig().isPremium() || ChatObject.isBoosted(chatInfo) || ChatObject.hasAdminRights(currentChat))) {
                 RLottieDrawable drawable = new RLottieDrawable(R.raw.boosts, dp(24), dp(24));
@@ -34376,6 +34396,12 @@ public class ChatActivity extends BaseFragment implements
                 presentFragment(fragment);
                 break;
             }
+            case OPTION_EDIT_HISTORY: {
+                if (getParentActivity() != null && selectedObject != null) {
+                    AeroUiHelper.showEditHistoryDialog(getParentActivity(), selectedObject);
+                }
+                break;
+            }
             case OPTION_COPY: {
                 final TL_iv.RichMessage copyRichMessage = selectedObject.messageOwner != null ? selectedObject.messageOwner.rich_message : null;
                 if (selectedObject.isDice()) {
@@ -34969,8 +34995,14 @@ public class ChatActivity extends BaseFragment implements
                 break;
             }
             case OPTION_CALL_AGAIN: {
-                if (currentUser != null) {
-                    VoIPHelper.startCall(currentUser, selectedObject.isVideoCall(), userInfo != null && userInfo.video_calls_available, getParentActivity(), getMessagesController().getUserFull(currentUser.id), getAccountInstance());
+                if (currentUser != null && getParentActivity() != null) {
+                    boolean isVid = selectedObject.isVideoCall();
+                    AeroUiHelper.confirmAndStartCall(
+                        getParentActivity(),
+                        UserObject.getUserName(currentUser),
+                        isVid,
+                        () -> VoIPHelper.startCall(currentUser, isVid, userInfo != null && userInfo.video_calls_available, getParentActivity(), getMessagesController().getUserFull(currentUser.id), getAccountInstance())
+                    );
                 }
                 break;
             }
@@ -36619,8 +36651,34 @@ public class ChatActivity extends BaseFragment implements
         }
     }
 
+    private boolean aeroBypassRoundPrompt = false;
+
     public void sendMedia(MediaController.PhotoEntry photoEntry, VideoEditedInfo videoEditedInfo, boolean notify, int scheduleDate, int scheduleRepeatPeriod, boolean forceDocument, long stars) {
         if (photoEntry == null) {
+            return;
+        }
+        if (!aeroBypassRoundPrompt && photoEntry.isVideo && !forceDocument && editingMessageObject == null && AeroConfig.galleryRoundVideo && (videoEditedInfo == null || !videoEditedInfo.roundVideo) && getParentActivity() != null && photoEntry.duration <= 65) {
+            new AlertDialog.Builder(getParentActivity())
+                .setTitle("Video formatini tanlang")
+                .setMessage("Galereyadagi ushbu videoni dumaloq video-xabar ko‘rinishida yuborishni xohlaysizmi?")
+                .setPositiveButton("Dumaloq video", (d, w) -> {
+                    VideoEditedInfo roundInfo = SendMessagesHelper.createAeroRoundVideoSettings(photoEntry.path);
+                    aeroBypassRoundPrompt = true;
+                    try {
+                        sendMedia(photoEntry, roundInfo, notify, scheduleDate, scheduleRepeatPeriod, forceDocument, stars);
+                    } finally {
+                        aeroBypassRoundPrompt = false;
+                    }
+                })
+                .setNegativeButton("Oddiy video", (d, w) -> {
+                    aeroBypassRoundPrompt = true;
+                    try {
+                        sendMedia(photoEntry, videoEditedInfo, notify, scheduleDate, scheduleRepeatPeriod, forceDocument, stars);
+                    } finally {
+                        aeroBypassRoundPrompt = false;
+                    }
+                })
+                .show();
             return;
         }
 
@@ -46628,6 +46686,11 @@ public class ChatActivity extends BaseFragment implements
                     items.add(LocaleController.getString(R.string.Edit));
                     options.add(OPTION_EDIT);
                     icons.add(R.drawable.msg_edit);
+                }
+                if (AeroConfig.saveEditHistory && selectedObject != null && selectedObject.getId() > 0 && org.telegram.messenger.AeroEditHistoryStore.hasHistory(currentAccount, selectedObject.getDialogId(), selectedObject.getId())) {
+                    items.add("Tahrirlar tarixi");
+                    options.add(OPTION_EDIT_HISTORY);
+                    icons.add(R.drawable.msg_recent);
                 }
                 if (ChatObject.isMonoForum(currentChat) && selectedObject.getGroupId() == 0 && selectedObjectGroup == null && message != null && message.messageOwner != null && message.messageOwner.suggested_post == null && message.messageOwner.action == null) {
                     items.add(LocaleController.getString(R.string.EditOfferAdd));

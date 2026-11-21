@@ -15592,8 +15592,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         } else {
             baseTime = (AeroConfig.showSecondsInTime ? LocaleController.getInstance().getFormatterDayWithSeconds() : LocaleController.getInstance().getFormatterDay()).format((long) (message.messageOwner.date) * 1000);
         }
+        if (AeroConfig.showIdAndDc && current.getId() > 0) {
+            baseTime = "#" + current.getId() + " • " + baseTime;
+        }
         if (AeroConfig.saveDeletedMessages && (current.deleted || AeroDeletedStore.isDeleted(current.currentAccount, current.getDialogId(), current.getId()))) {
-            return "O‘chirilgan • " + baseTime;
+            return "\uD83D\uDDD1 O‘chirilgan • " + baseTime;
         }
         return baseTime;
     }

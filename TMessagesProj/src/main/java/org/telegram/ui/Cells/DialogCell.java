@@ -60,6 +60,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 
+import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ChatObject;
@@ -2297,7 +2298,11 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         topicIconInName[0] = null;
                         nameString = showTopicIconInName ? ForumUtilities.getTopicSpannedName(forumTopic, Theme.dialogs_namePaint[paintIndex], topicIconInName, false) : AndroidUtilities.escape(forumTopic.title);
                     } else {
-                        nameString = AndroidUtilities.escape(UserObject.getUserName(user));
+                        String rawName = UserObject.getUserName(user);
+                        if (AeroConfig.showMutualBadge && user.mutual_contact && !user.bot && !user.self) {
+                            rawName = rawName + " \uD83E\uDD1D";
+                        }
+                        nameString = AndroidUtilities.escape(rawName);
                     }
                 }
                 if (nameString != null && nameString.length() == 0) {

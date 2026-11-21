@@ -75,6 +75,7 @@ import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeBind;
 import org.telegram.ui.ActionBar.ThemeColors;
 import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.ui.Components.AeroLogoDrawable;
 import org.telegram.ui.Components.BottomPagesView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RLottieDrawable;
@@ -154,9 +155,9 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
 
     @Override
     public View createView(Context context) {
-        logoDrawable = context.getResources().getDrawable(R.drawable.ic_aerogram_monochrome).mutate();
-        logoDrawable.setBounds(0, dp(2), dp(34), dp(36));
-        SpannableStringBuilder ssb = new SpannableStringBuilder("  " + LocaleController.getString(R.string.AppName));
+        logoDrawable = new AeroLogoDrawable(context, 28, 25f);
+        logoDrawable.setBounds(0, dp(2), logoDrawable.getIntrinsicWidth(), dp(2) + logoDrawable.getIntrinsicHeight());
+        SpannableStringBuilder ssb = new SpannableStringBuilder(" ");
         ssb.setSpan(new ImageSpan(logoDrawable), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         titles[0] = ssb;
 

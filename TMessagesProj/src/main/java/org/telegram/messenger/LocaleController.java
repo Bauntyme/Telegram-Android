@@ -4787,6 +4787,12 @@ public class LocaleController {
 
     @Nullable
     private String getStringV2(String key, @StringRes int stringRes, String fallback) {
+        if (stringRes == R.string.AppName || "AppName".equals(key)) {
+            return "AeroGram";
+        }
+        if (stringRes == R.string.AppNameBeta || "AppNameBeta".equals(key)) {
+            return "AeroGram Beta";
+        }
         final Context context = ApplicationLoader.applicationContext;
         String value;
 

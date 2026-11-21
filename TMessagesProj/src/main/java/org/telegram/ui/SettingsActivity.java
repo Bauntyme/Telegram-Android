@@ -795,7 +795,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
         }
 
-        items.add(SettingCell.Factory.of(777, 0xFF0EA5E9, 0xFF312E81, R.drawable.ic_aerogram_monochrome, "AeroGram Settings", "Ghost Mode, O‘chirilgan xabarlar, Maxsus sozlamalar"));
+        items.add(SettingCell.Factory.of(777, 0xFFF59E0B, 0xFFD97706, R.drawable.ic_aerogram_monochrome, "AeroGram Settings", null));
+        items.add(SettingCell.Factory.of(778, 0xFF0EA5E9, 0xFF0284C7, R.drawable.msg_stats, "AeroGram Statistika", null));
         items.add(UItem.asShadow(null));
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
@@ -922,6 +923,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         switch (item.id) {
             case 777:
                 presentSettingFragment(new AeroSettingsActivity());
+                break;
+            case 778:
+                presentSettingFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_STATS));
                 break;
             case 1:
                 presentSettingFragment(new UserInfoActivity());

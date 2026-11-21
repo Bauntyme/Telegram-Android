@@ -117,6 +117,7 @@ import org.telegram.ui.recyclerview.ChatListItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ApplicationLoader;
@@ -7562,7 +7563,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected boolean showConfirmAlert(Runnable onConfirmed) {
-        return false;
+        return org.telegram.ui.AeroUiHelper.maybeConfirmSendMedia(parentActivity, "stiker yoki GIF", onConfirmed);
     }
 
     public static boolean checkPremiumAnimatedEmoji(int currentAccount, long dialogId, BaseFragment parentFragment, FrameLayout container, CharSequence message) {

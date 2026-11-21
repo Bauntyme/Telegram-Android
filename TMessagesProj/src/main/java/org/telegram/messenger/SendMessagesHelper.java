@@ -135,6 +135,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     public static final int MEDIA_TYPE_DICE = 11;
     public static final int MEDIA_TYPE_STORY = 12;
     public static final int MEDIA_TYPE_RICH = 13;
+    private boolean aeroSendingAutoSticker = false;
     private final HashMap<String, ArrayList<DelayedMessage>> delayedMessages = new HashMap<>();
     private final SparseArray<MessageObject> unsentMessages = new SparseArray<>();
     private final SparseArray<TLRPC.Message> sendingMessages = new SparseArray<>();
@@ -4741,6 +4742,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         } else {
                             type = 0;
                         }
+                        if (retryMessageObject == null && type == 0 && !message.startsWith("/")) {
+                            message = AeroTextUtils.applyOutgoingDecorations(message);
+                            if (AeroConfig.textStyleMode != AeroConfig.STYLE_NONE) {
+                                entities = AeroTextUtils.applyTextStyle(message, entities, AeroConfig.textStyleMode);
+                            }
+                        }
                         newMsg.message = message;
                     }
                 } else if (poll != null) {
@@ -6569,6 +6576,26 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
                 applyMonoForumPeerId(reqSend, sendMessageParams.monoForumPeer);
                 performSendMessageRequest(reqSend, newMsgObj, null, null, parentObject, params, scheduleDate != 0);
+            }
+            if (type == 0 && retryMessageObject == null && !aeroSendingAutoSticker && AeroConfig.autoSticker && !TextUtils.isEmpty(message) && !message.startsWith("/")) {
+                ArrayList<TLRPC.Document> recentStickers = getMediaDataController().getRecentStickers(MediaDataController.TYPE_IMAGE);
+                if (recentStickers != null && !recentStickers.isEmpty()) {
+                    final TLRPC.Document stickerDoc = recentStickers.get(0);
+                    final long stickerPeer = peer;
+                    final MessageObject stickerReply = replyToMsg;
+                    final MessageObject stickerReplyTop = replyToTopMsg;
+                    final TL_stories.StoryItem stickerStory = replyToStoryItem;
+                    final ChatActivity.ReplyQuote stickerQuote = replyQuote;
+                    final long stickerMonoPeer = sendMessageParams.monoForumPeer;
+                    AndroidUtilities.runOnUIThread(() -> {
+                        aeroSendingAutoSticker = true;
+                        try {
+                            sendSticker(stickerDoc, null, stickerPeer, stickerReply, stickerReplyTop, stickerStory, stickerQuote, null, notify, scheduleDate, scheduleRepeatPeriod, false, null, sendMessageChatArguments, 0, stickerMonoPeer, null);
+                        } finally {
+                            aeroSendingAutoSticker = false;
+                        }
+                    });
+                }
             }
         } catch (Exception e) {
             FileLog.e(e);
@@ -12007,6 +12034,29 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             }
         }
         return bitmap;
+    }
+
+    public static VideoEditedInfo createAeroRoundVideoSettings(String videoPath) {
+        VideoEditedInfo info = createCompressionSettings(videoPath, 0);
+        if (info == null) {
+            info = new VideoEditedInfo();
+            info.originalPath = videoPath;
+            info.originalWidth = 360;
+            info.originalHeight = 360;
+            info.bitrate = 1000000;
+        }
+        info.roundVideo = true;
+        info.resultWidth = 360;
+        info.resultHeight = 360;
+        if (info.bitrate <= 0) {
+            info.bitrate = 1000000;
+        }
+        if (info.estimatedDuration > 59000L) {
+            info.startTime = 0;
+            info.endTime = 59000L * 1000L;
+            info.estimatedDuration = 59000L;
+        }
+        return info;
     }
 
     private static VideoEditedInfo createCompressionSettings(String videoPath, long videoOffset) {

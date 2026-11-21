@@ -133,6 +133,7 @@ import androidx.viewpager.widget.ViewPager;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
@@ -671,6 +672,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int userInfoRow;
     private int channelInfoRow;
     private int usernameRow;
+    private int aeroIdRow;
     private int notificationsDividerRow;
     private int notificationsRow;
     private int bizHoursRow;
@@ -4460,6 +4462,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 openAddMember();
             } else if (position == usernameRow) {
                 processOnClickOrPress(position, view, x, y);
+            } else if (position == aeroIdRow) {
+                long rawId = userId != 0 ? userId : chatId;
+                if (AndroidUtilities.addToClipboard(String.valueOf(rawId))) {
+                    BulletinFactory.of(ProfileActivity.this).createCopyBulletin("ID nusxalandi: " + rawId).show();
+                }
             } else if (position == linkedCommunityRow) {
                 if (currentChat != null) {
                     showDialog(new CommunitySheet(this, currentChat.linked_community_id));
@@ -6259,14 +6266,24 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (userId != 0) {
             TLRPC.User user = getMessagesController().getUser(userId);
             if (user != null) {
-                VoIPHelper.startCall(user, isVideoCall, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
+                AeroUiHelper.confirmAndStartCall(
+                    getParentActivity(),
+                    UserObject.getUserName(user),
+                    isVideoCall,
+                    () -> VoIPHelper.startCall(user, isVideoCall, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance())
+                );
             }
         } else if (chatId != 0) {
             ChatObject.Call call = getMessagesController().getGroupCall(chatId, false);
             if (call == null) {
                 VoIPHelper.showGroupCallAlert(ProfileActivity.this, currentChat, null, false, getAccountInstance());
             } else {
-                VoIPHelper.startCall(currentChat, null, null, false, getParentActivity(), ProfileActivity.this, getAccountInstance());
+                AeroUiHelper.confirmAndStartCall(
+                    getParentActivity(),
+                    currentChat != null ? currentChat.title : null,
+                    false,
+                    () -> VoIPHelper.startCall(currentChat, null, null, false, getParentActivity(), ProfileActivity.this, getAccountInstance())
+                );
             }
         }
     }
@@ -7580,12 +7597,22 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (userInfo != null && userInfo.phone_calls_available) {
                     o.add(R.drawable.msg_calls, getString(R.string.CallViaTelegram), () -> {
                         if (getParentActivity() == null) return;
-                        VoIPHelper.startCall(user, false, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
+                        AeroUiHelper.confirmAndStartCall(
+                            getParentActivity(),
+                            UserObject.getUserName(user),
+                            false,
+                            () -> VoIPHelper.startCall(user, false, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance())
+                        );
                     });
                     if (userInfo.video_calls_available) {
                         o.add(R.drawable.msg_videocall, getString(R.string.VideoCallViaTelegram), () -> {
                             if (getParentActivity() == null) return;
-                            VoIPHelper.startCall(user, true, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
+                            AeroUiHelper.confirmAndStartCall(
+                                getParentActivity(),
+                                UserObject.getUserName(user),
+                                true,
+                                () -> VoIPHelper.startCall(user, true, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance())
+                            );
                         });
                     }
                 }
@@ -10884,6 +10911,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         locationRow = -1;
         channelInfoRow = -1;
         usernameRow = -1;
+        aeroIdRow = -1;
         settingsTimerRow = -1;
         settingsKeyRow = -1;
         notificationsDividerRow = -1;
@@ -11078,6 +11106,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
+                if (AeroConfig.showIdAndDc) {
+                    aeroIdRow = rowCount++;
+                }
                 if (userInfo != null) {
                     if (userInfo.birthday != null) {
                         birthdayRow = rowCount++;
@@ -11213,7 +11244,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 sharedMediaRow = rowCount++;
             }
         } else if (chatId != 0) {
-            if (chatInfo != null && (!TextUtils.isEmpty(chatInfo.about) || chatInfo.location instanceof TLRPC.TL_channelLocation) || ChatObject.isPublic(currentChat)) {
+            if (chatInfo != null && (!TextUtils.isEmpty(chatInfo.about) || chatInfo.location instanceof TLRPC.TL_channelLocation) || ChatObject.isPublic(currentChat) || AeroConfig.showIdAndDc) {
                 if (emptyRow < 0 && emptyRow2 < 0) {
                     if (hasMusic || hasBalance || peerColor != null || actionsView == null) {
                         emptyRow2 = rowCount++;
@@ -11235,6 +11266,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
                 if (ChatObject.isPublic(currentChat)) {
                     usernameRow = rowCount++;
+                }
+                if (AeroConfig.showIdAndDc) {
+                    aeroIdRow = rowCount++;
                 }
             }
             if (emptyRow < 0 && emptyRow2 < 0) {
@@ -13689,6 +13723,21 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             getString(R.string.ProfileNotesInfo),
                             false
                         );
+                    } else if (position == aeroIdRow) {
+                        String idText = String.valueOf(userId != 0 ? userId : chatId);
+                        int dcId = 0;
+                        if (userId != 0) {
+                            TLRPC.User u = getMessagesController().getUser(userId);
+                            if (u != null && u.photo != null && u.photo.dc_id > 0) {
+                                dcId = u.photo.dc_id;
+                            } else if (userId == getUserConfig().getClientUserId()) {
+                                dcId = getConnectionsManager().getCurrentDatacenterId();
+                            }
+                        } else if (currentChat != null && currentChat.photo != null && currentChat.photo.dc_id > 0) {
+                            dcId = currentChat.photo.dc_id;
+                        }
+                        String label = dcId > 0 ? ("Telegram ID • DC" + dcId) : "Telegram ID";
+                        detailCell.setTextAndValue(idText, label, false);
                     } else if (position == usernameRow) {
                         String username = null;
                         CharSequence text;
@@ -14487,7 +14536,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             if (position == infoHeaderRow || position == membersHeaderRow || position == settingsSectionRow2 ||
                     position == numberSectionRow || position == helpHeaderRow || position == debugHeaderRow || position == botPermissionsHeader) {
                 return VIEW_TYPE_HEADER;
-            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow) {
+            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow || position == aeroIdRow) {
                 return VIEW_TYPE_TEXT_DETAIL;
             } else if (position == usernameRow || position == setUsernameRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE;

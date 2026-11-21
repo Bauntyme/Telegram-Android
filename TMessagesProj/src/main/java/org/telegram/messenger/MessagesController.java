@@ -18765,6 +18765,13 @@ public class MessagesController extends BaseController implements NotificationCe
                         message.media_unread = false;
                         message.out = true;
                     }
+                    if (!message.out && message.dialog_id > 0 && AeroConfig.blockForeignNumbers) {
+                        TLRPC.User senderUser = getUser(message.dialog_id);
+                        if (AeroTextUtils.isForeignNonContact(currentAccount, senderUser)) {
+                            message.silent = true;
+                            AeroConfig.incrementBlockedForeign();
+                        }
+                    }
 
                     boolean isDialogCreated = createdDialogIds.contains(message.dialog_id);
                     MessageObject obj = new MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated);
@@ -21067,6 +21074,14 @@ public class MessagesController extends BaseController implements NotificationCe
                             for (int a = 0, size2 = arrayList.size(); a < size2; a++) {
                                 MessageObject newMessage = arrayList.get(a);
                                 if (oldObject.getId() == newMessage.getId()) {
+                                    if (AeroConfig.saveEditHistory && oldObject.messageOwner != null && newMessage.messageOwner != null) {
+                                        String oldText = oldObject.messageOwner.message;
+                                        String newText = newMessage.messageOwner.message;
+                                        if (oldText != null && !oldText.equals(newText)) {
+                                            int editTs = oldObject.messageOwner.edit_date > 0 ? oldObject.messageOwner.edit_date : oldObject.messageOwner.date;
+                                            AeroEditHistoryStore.recordPreviousVersion(currentAccount, oldObject.getDialogId(), oldObject.getId(), editTs, oldText);
+                                        }
+                                    }
                                     oldObjects.set(i, newMessage);
                                     if (newMessage.messageOwner.peer_id != null && newMessage.messageOwner.peer_id.channel_id == 0) {
                                         dialogMessagesByIds.put(newMessage.getId(), newMessage);

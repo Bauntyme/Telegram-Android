@@ -98,6 +98,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.ViewPager;
 
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ApplicationLoader;
@@ -178,6 +179,7 @@ import org.telegram.ui.Cells.TextCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.UnconfirmedAuthHintCell;
 import org.telegram.ui.Cells.UserCell;
+import org.telegram.ui.Components.AeroLogoDrawable;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimationProperties;
@@ -502,6 +504,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ValueAnimator contactsAlphaAnimator;
     private ViewPage[] viewPages;
     private ActionBarMenuItem passcodeItem;
+    private ActionBarMenuItem ghostQuickItem;
     private ActionBarMenuItem downloadsItem;
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
@@ -3193,6 +3196,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             passcodeItem = menu.addItem(1, R.drawable.outline_header_lock_24);
             passcodeItem.setContentDescription(getString(R.string.AccDescrPasscodeLock));
 
+            ghostQuickItem = menu.addItem(779, R.drawable.msg_stealth_locked);
+            ghostQuickItem.setContentDescription("Ghost Mode");
+            ghostQuickItem.setAlpha(AeroConfig.isAnyGhostActive() ? 1.0f : 0.65f);
+
             downloadsItem = menu.addItem(3, new ColorDrawable(Color.TRANSPARENT));
             downloadsItem.addView(downloadProgressIcon = new DownloadProgressIcon(currentAccount, context));
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
@@ -3436,10 +3443,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
-                logoDrawable = context.getResources().getDrawable(R.drawable.ic_aerogram_monochrome).mutate();
-                logoDrawable.setBounds(0, dp(1), dp(22), dp(23));
+                logoDrawable = new AeroLogoDrawable(context);
                 logoDrawable.setColorFilter(lastLogoDrawableColor = getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
-                SpannableStringBuilder ssb = new SpannableStringBuilder("  " + getString(R.string.AppName));
+                SpannableStringBuilder ssb = new SpannableStringBuilder(" ");
                 ssb.setSpan(new ImageSpan(logoDrawable), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 actionBar.setTitle(ssb, statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
@@ -3819,6 +3825,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     } else if (onlySelect || folderId != 0 || communityId != 0) {
                         finishFragment();
                     }
+                } else if (id == 779) {
+                    boolean nextGhost = !AeroConfig.isAnyGhostActive();
+                    AeroConfig.toggleMasterGhost(nextGhost);
+                    getMessagesController().updateTimerProc();
+                    if (ghostQuickItem != null) {
+                        ghostQuickItem.setAlpha(nextGhost ? 1.0f : 0.65f);
+                    }
+                    BulletinFactory.of(DialogsActivity.this).createSimpleBulletin(
+                        R.raw.contact_check,
+                        nextGhost ? "Ghost Mode: Yoqildi (ko‘rinmas)" : "Ghost Mode: O‘chirildi"
+                    ).show();
                 } else if (id == 1) {
                     if (getParentActivity() == null) {
                         return;
@@ -6780,7 +6797,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             filterOptions = null;
         }
         final ArrayList<MessagesController.DialogFilter> filters = getMessagesController().getDialogFilters();
-        if (filters.size() > 1) {
+        if (!AeroConfig.hideFolders && filters.size() > 1) {
             if (force || filterTabsView.getVisibility() != View.VISIBLE) {
                 boolean animatedUpdateItems = animated;
                 if (filterTabsView.getVisibility() != View.VISIBLE) {
@@ -8625,7 +8642,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
             int maxPinnedCount;
-            if (containsFilter && filter != null) {
+            if (AeroConfig.unlimitedPins) {
+                maxPinnedCount = 1000;
+            } else if (containsFilter && filter != null) {
                 maxPinnedCount = 100 - filter.alwaysShow.size();
             } else if (folderId != 0 || filter != null) {
                 if (getUserConfig().isPremium()) {
@@ -10520,6 +10539,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         } else if (id == NotificationCenter.updateInterfaces) {
             Integer mask = (Integer) args[0];
             updateVisibleRows(mask);
+            checkUi_itemGhostVisibility();
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) != 0) {
                 filterTabsView.checkTabsCounter();
             }
@@ -12433,6 +12453,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             newVisibility = !onlySelfStories && getStoriesController().hasStories();
             onlySelfStories = getStoriesController().hasOnlySelfStories();
         }
+        if (!AeroConfig.showStoriesBar) {
+            newVisibility = false;
+            onlySelfStories = false;
+        }
 
         hasOnlySlefStories = onlySelfStories;
 
@@ -13740,7 +13764,21 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         checkUi_itemDownloadsVisibility();
         checkUi_itemSpeedVisibility();
         checkUi_itemPasscodeVisibility();
+        checkUi_itemGhostVisibility();
         checkUi_itemSearchVisibility();
+    }
+
+    private void checkUi_itemGhostVisibility() {
+        if (ghostQuickItem == null) {
+            return;
+        }
+        final float factor0 = AeroConfig.showGhostButtonInChats ? 1 : 0;
+        final float factor1 = 1f - animatorSearchVisible.getFloatValue();
+        final float factor2 = 1f - getRightSlidingProgress();
+        final float factor3 = 1f - animatorDoneButtonVisible.getFloatValue();
+        final float factor = factor0 * factor1 * factor2 * factor3;
+        ghostQuickItem.setAlpha(AeroConfig.isAnyGhostActive() ? 1.0f : 0.65f);
+        FragmentFloatingButton.setAnimatedVisibility(ghostQuickItem, factor);
     }
 
     private void checkUi_itemBackButtonVisibility() {

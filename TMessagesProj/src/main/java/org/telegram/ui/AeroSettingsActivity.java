@@ -1,80 +1,86 @@
 package org.telegram.ui;
 
-import static org.telegram.messenger.AndroidUtilities.dp;
-
 import android.content.Context;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.util.TypedValue;
-import android.view.Gravity;
+import android.content.Intent;
+import android.text.TextUtils;
 import android.view.View;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.EditText;
 
 import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AeroDeletedStore;
-import org.telegram.messenger.BuildConfig;
+import org.telegram.messenger.AeroEditHistoryStore;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.UserConfig;
+import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.SimpleActionBarMenu;
 import org.telegram.ui.Components.BulletinFactory;
-import org.telegram.ui.Components.IconBackgroundColors;
-import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
+/**
+ * AeroGram Settings screen styled faithfully after NovaGram's clean iOS/Telegram grouped design,
+ * with live search filtering, colored rounded-square badges, YANGI / AERO pills, and 2 custom AeroGram features.
+ */
 public class AeroSettingsActivity extends UniversalFragment {
 
-    public static final int MODE_HUB = 0;
-    public static final int MODE_GHOST = 1;
-    public static final int MODE_ANTI_DELETE = 2;
-    public static final int MODE_CHATS = 3;
-    public static final int MODE_SECURITY = 4;
+    private static final int ID_ABOUT = 1;
+    private static final int ID_ACCOUNTS = 2;
 
-    private static final int ID_QUICK_GHOST = 10;
-    private static final int ID_CAT_GHOST = 11;
-    private static final int ID_CAT_ANTI_DELETE = 12;
-    private static final int ID_CAT_CHATS = 13;
-    private static final int ID_CAT_SECURITY = 14;
-    private static final int ID_RESET_ALL = 15;
+    // Chat section
+    private static final int ID_SAVE_DELETED = 10;
+    private static final int ID_EDIT_HISTORY = 11;
+    private static final int ID_JUMP_FIRST = 12;
+    private static final int ID_GHOST_BUTTON = 13;
+    private static final int ID_GHOST_DETAILS = 14;
+    private static final int ID_CAMERA_HOLD = 15;
+    private static final int ID_GALLERY_ROUND_VIDEO = 16;
+    private static final int ID_FWD_NO_AUTHOR = 17;
+    private static final int ID_FWD_NO_CAPTION = 18;
 
-    private static final int ID_GHOST_READ = 20;
-    private static final int ID_GHOST_TYPING = 21;
-    private static final int ID_GHOST_OFFLINE = 22;
-    private static final int ID_GHOST_READ_ON_INTERACT = 23;
-    private static final int ID_GHOST_STORY = 24;
+    // Interface section
+    private static final int ID_HIDE_FOLDERS = 20;
+    private static final int ID_STORIES_PANEL = 21;
+    private static final int ID_MUTUAL_BADGE = 22;
+    private static final int ID_UNLIMITED_PINS = 23;
 
-    private static final int ID_SAVE_DELETED = 30;
-    private static final int ID_CLEAR_DELETED = 31;
+    // Messages section
+    private static final int ID_TEXT_STYLE = 30;
+    private static final int ID_AUTO_POSTFIX = 31;
+    private static final int ID_TRANSLATE_BTN = 32;
+    private static final int ID_TRANSLATE_LANG = 33;
+    private static final int ID_NEW_ALPHABET = 34;
+    private static final int ID_AUTO_STICKER = 35;
+    private static final int ID_HEART_EFFECT = 36;
 
-    private static final int ID_FWD_NO_AUTHOR = 40;
-    private static final int ID_FWD_NO_CAPTION = 41;
-    private static final int ID_SECONDS_IN_TIME = 42;
-    private static final int ID_NO_ROUND_NUMBERS = 43;
+    // Security section
+    private static final int ID_BLOCK_FOREIGN = 40;
+    private static final int ID_DISABLE_AUTODL = 41;
+    private static final int ID_CONFIRM_MEDIA = 42;
+    private static final int ID_SCREENSHOT_PROTECT = 43;
 
-    private static final int ID_SCREENSHOT_PROTECT = 50;
+    // Functions & AeroGram Unique section
+    private static final int ID_CHANNEL_HISTORY = 50;
+    private static final int ID_SECONDS_TIME = 51;
+    private static final int ID_NO_ROUND_NUMS = 52;
+    private static final int ID_CONFIRM_CALL = 53;       // AeroGram Unique #1
+    private static final int ID_SHOW_ID_DC = 54;         // AeroGram Unique #2
+    private static final int ID_SHARE_AERO = 55;
 
-    private final int mode;
-    private FrameLayout heroWrapper;
-    private TextView ghostPillView;
-    private TextView antiDeletePillView;
+    // Maintenance
+    private static final int ID_CLEAR_HISTORY = 60;
+    private static final int ID_RESET_ALL = 61;
 
-    public AeroSettingsActivity() {
-        this(MODE_HUB);
-    }
-
-    public AeroSettingsActivity(int mode) {
-        this.mode = mode;
-    }
+    private String searchQuery = "";
+    private ActionBarMenuItem searchItem;
 
     @Override
     protected boolean useSimpleActionBar() {
@@ -93,318 +99,285 @@ public class AeroSettingsActivity extends UniversalFragment {
 
     @Override
     protected CharSequence getTitle() {
-        switch (mode) {
-            case MODE_GHOST:
-                return "Ghost Mode";
-            case MODE_ANTI_DELETE:
-                return "O‘chirilgan xabarlar";
-            case MODE_CHATS:
-                return "Chatlar va Ko‘rinish";
-            case MODE_SECURITY:
-                return "Xavfsizlik va Himoya";
-            case MODE_HUB:
-            default:
-                return "AeroGram Settings";
-        }
+        return "AeroGram";
     }
 
     @Override
     public View createView(Context context) {
-        setHasOwnBackground(true);
-        fragmentView = super.createView(context);
-        listView.setSections();
-        listView.setSectionsDrawBackground(true);
-        if (mode == MODE_HUB) {
-            heroWrapper = createHeroCard(context);
+        View root = super.createView(context);
+        if (simpleActionBar != null) {
+            final SimpleActionBarMenu menu = simpleActionBar.createMenu();
+            searchItem = menu.addItem(0, R.drawable.outline_header_search, getResourceProvider())
+                .setIsSearchField(true)
+                .setActionBarMenuItemSearchListener(new ActionBarMenuItem.ActionBarMenuItemSearchListener() {
+                    @Override
+                    public void onSearchExpand() {
+                        searchQuery = "";
+                        if (listView != null && listView.adapter != null) {
+                            listView.adapter.update(false);
+                        }
+                    }
+
+                    @Override
+                    public void onSearchCollapse() {
+                        searchQuery = "";
+                        if (listView != null && listView.adapter != null) {
+                            listView.adapter.update(true);
+                        }
+                    }
+
+                    @Override
+                    public void onTextChanged(EditText editText) {
+                        searchQuery = editText != null && editText.getText() != null
+                            ? editText.getText().toString().trim().toLowerCase(Locale.ROOT)
+                            : "";
+                        if (listView != null && listView.adapter != null) {
+                            listView.adapter.update(true);
+                        }
+                    }
+                });
+            searchItem.setSearchFieldHint("Sozlamalarni qidirish...");
         }
-        return fragmentView;
+        return root;
     }
 
     @Override
     public void onResume() {
         super.onResume();
         if (listView != null && listView.adapter != null) {
-            updateHeroPills();
-            listView.adapter.update(true);
+            listView.adapter.update(false);
         }
     }
 
-    private FrameLayout createHeroCard(Context context) {
-        FrameLayout outer = new FrameLayout(context);
-        outer.setPadding(dp(16), dp(12), dp(16), dp(12));
-
-        LinearLayout card = new LinearLayout(context);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(18), dp(18), dp(18), dp(16));
-
-        GradientDrawable cardBg = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            new int[] { 0xFF0EA5E9, 0xFF0284C7, 0xFF312E81 }
-        );
-        cardBg.setCornerRadius(dp(18));
-        card.setBackground(cardBg);
-
-        LinearLayout topRow = new LinearLayout(context);
-        topRow.setOrientation(LinearLayout.HORIZONTAL);
-        topRow.setGravity(Gravity.CENTER_VERTICAL);
-
-        ImageView logo = new ImageView(context);
-        logo.setImageResource(R.drawable.ic_aerogram_logo);
-        topRow.addView(logo, LayoutHelper.createLinear(54, 54));
-
-        LinearLayout titleCol = new LinearLayout(context);
-        titleCol.setOrientation(LinearLayout.VERTICAL);
-        titleCol.setPadding(dp(14), 0, 0, 0);
-
-        TextView titleView = new TextView(context);
-        titleView.setText("AeroGram");
-        titleView.setTextColor(Color.WHITE);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
-        titleView.setTypeface(Typeface.DEFAULT_BOLD);
-        titleCol.addView(titleView);
-
-        TextView subView = new TextView(context);
-        subView.setText("v" + BuildConfig.BUILD_VERSION_STRING + " • Maxsus Edition");
-        subView.setTextColor(0xDDF0F9FF);
-        subView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.5f);
-        titleCol.addView(subView);
-
-        topRow.addView(titleCol, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        card.addView(topRow);
-
-        LinearLayout pillsRow = new LinearLayout(context);
-        pillsRow.setOrientation(LinearLayout.HORIZONTAL);
-        pillsRow.setPadding(0, dp(14), 0, 0);
-
-        ghostPillView = createStatusPill(context);
-        antiDeletePillView = createStatusPill(context);
-        pillsRow.addView(ghostPillView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 8, 0));
-        pillsRow.addView(antiDeletePillView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
-
-        card.addView(pillsRow);
-        outer.addView(card, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        updateHeroPills();
-        return outer;
-    }
-
-    private TextView createStatusPill(Context context) {
-        TextView tv = new TextView(context);
-        tv.setTextColor(Color.WHITE);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11.5f);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setPadding(dp(10), dp(4), dp(10), dp(4));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x33FFFFFF);
-        bg.setCornerRadius(dp(50));
-        tv.setBackground(bg);
-        return tv;
-    }
-
-    private void updateHeroPills() {
-        if (ghostPillView != null) {
-            ghostPillView.setText(AeroConfig.isAnyGhostActive() ? "Ghost: Yoqiq" : "Ghost: O‘chiq");
+    @Override
+    public boolean onBackPressed(boolean invoked) {
+        if (simpleActionBar != null && simpleActionBar.isSearchFieldVisible()) {
+            if (invoked) simpleActionBar.closeSearchField();
+            return false;
         }
-        if (antiDeletePillView != null) {
-            int count = AeroDeletedStore.getTotalSavedCount();
-            antiDeletePillView.setText(
-                AeroConfig.saveDeletedMessages
-                    ? ("Anti-Delete: Yoqiq (" + count + ")")
-                    : "Anti-Delete: O‘chiq"
-            );
+        return super.onBackPressed(invoked);
+    }
+
+    private boolean matches(String title, String subtitle) {
+        if (TextUtils.isEmpty(searchQuery)) {
+            return true;
+        }
+        String t = title != null ? title.toLowerCase(Locale.ROOT) : "";
+        String s = subtitle != null ? subtitle.toLowerCase(Locale.ROOT) : "";
+        return t.contains(searchQuery) || s.contains(searchQuery);
+    }
+
+    private void addNavIfMatch(ArrayList<UItem> target, int id, int color, int icon, String title, String subtitle, String value, int badge) {
+        if (matches(title, subtitle)) {
+            target.add(AeroRowCell.Factory.ofNav(id, color, icon, title, subtitle, value, badge));
+        }
+    }
+
+    private void addSwitchIfMatch(ArrayList<UItem> target, int id, int color, int icon, String title, String subtitle, boolean checked, int badge) {
+        if (matches(title, subtitle)) {
+            target.add(AeroRowCell.Factory.ofSwitch(id, color, icon, title, subtitle, checked, badge));
         }
     }
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        switch (mode) {
-            case MODE_GHOST:
-                items.add(UItem.asHeader("Ghost Mode (Ko‘rinmaslik)"));
-                items.add(UItem.asButtonCheck(
-                    ID_GHOST_READ,
-                    "O‘qilganlik belgisini yubormaslik",
-                    "Xabarni ochsangiz ham suhbatdoshga ikki belgi ketmaydi"
-                ).setChecked(AeroConfig.ghostDontReadMessages));
-                items.add(UItem.asButtonCheck(
-                    ID_GHOST_TYPING,
-                    "Yozayotganini yashirish",
-                    "\"yozmoqda...\" va \"ovoz yozmoqda...\" yuborilmaydi"
-                ).setChecked(AeroConfig.ghostDontSendTyping));
-                items.add(UItem.asButtonCheck(
-                    ID_GHOST_OFFLINE,
-                    "Doimiy Offline rejimi",
-                    "Ilovada bo‘lsangiz ham statusingizni offline saqlaydi"
-                ).setChecked(AeroConfig.ghostStayOffline));
-                items.add(UItem.asButtonCheck(
-                    ID_GHOST_READ_ON_INTERACT,
-                    "Javob yozganda o‘qilgan qilish",
-                    "Chatga xabar yozganingizdagina o‘qilgan deb belgilanadi"
-                ).setChecked(AeroConfig.ghostReadOnInteract));
-                items.add(UItem.asButtonCheck(
-                    ID_GHOST_STORY,
-                    "Story ko‘rganlikni yashirish",
-                    "Hikoyalarni (Stories) anonim ko‘rish imkoniyati"
-                ).setChecked(AeroConfig.ghostHideStoryViews));
-                items.add(UItem.asShadow("Barcha Ghost Mode sozlamalari standart holatda o‘chiq bo‘ladi. Faqat o‘zingizga keraklisini yoqib oling."));
-                break;
+        ArrayList<UItem> top = new ArrayList<>();
+        addNavIfMatch(top, ID_ABOUT, 0xFF007AFF, R.drawable.msg_info, "AeroGram haqida", null, null, AeroRowCell.BADGE_NONE);
+        if (!top.isEmpty()) {
+            items.addAll(top);
+            items.add(UItem.asShadow(null));
+        }
 
-            case MODE_ANTI_DELETE:
-                items.add(UItem.asHeader("O‘chirilgan xabarlar"));
-                items.add(UItem.asButtonCheck(
-                    ID_SAVE_DELETED,
-                    "O‘chirilgan xabarlarni saqlash",
-                    "Shaxsiy chatlar, guruhlar va kanallarda o‘chirilgan barcha xabarlarni saqlab qoladi"
-                ).setChecked(AeroConfig.saveDeletedMessages));
-                items.add(UItem.asShadow("Yoqilganda kimdir xabarni o‘chirsa ham chatdan o‘chmaydi va yonida \"O‘chirilgan\" belgisi bilan saqlanib qoladi."));
-                int totalSaved = AeroDeletedStore.getTotalSavedCount();
-                items.add(UItem.asButton(ID_CLEAR_DELETED, R.drawable.msg_delete, "Saqlangan tarixni tozalash", totalSaved + " ta").red());
-                break;
+        ArrayList<UItem> accounts = new ArrayList<>();
+        addNavIfMatch(accounts, ID_ACCOUNTS, 0xFF2563EB, R.drawable.msg_contacts, "Barcha akkauntlar", null, UserConfig.getActivatedAccountsCount() + " ta", AeroRowCell.BADGE_NONE);
+        if (!accounts.isEmpty()) {
+            items.add(UItem.asHeader("AKKAUNTLAR"));
+            items.addAll(accounts);
+            items.add(UItem.asShadow(null));
+        }
 
-            case MODE_CHATS:
-                items.add(UItem.asHeader("Uzatish (Forward) va Ko‘rinish"));
-                items.add(UItem.asButtonCheck(
-                    ID_FWD_NO_AUTHOR,
-                    "Muallif nomini yashirib uzatish",
-                    "Xabar uzatilganda asl muallif havolasisiz boradi"
-                ).setChecked(AeroConfig.forwardWithoutAuthor));
-                items.add(UItem.asButtonCheck(
-                    ID_FWD_NO_CAPTION,
-                    "Sarlavha (caption) siz uzatish",
-                    "Rasm yoki video uzatilganda tagidagi matn olib tashlanadi"
-                ).setChecked(AeroConfig.forwardWithoutCaption));
-                items.add(UItem.asButtonCheck(
-                    ID_SECONDS_IN_TIME,
-                    "Xabar vaqtida sekundni ko‘rsatish",
-                    "Masalan: 14:22:08 ko‘rinishida ko‘rsatiladi"
-                ).setChecked(AeroConfig.showSecondsInTime));
-                items.add(UItem.asButtonCheck(
-                    ID_NO_ROUND_NUMBERS,
-                    "Raqamlarni yaxlitlamaslik",
-                    "14.8K o‘rniga aniq obunachi sonini chiqaradi"
-                ).setChecked(AeroConfig.disableNumberRounding));
-                items.add(UItem.asShadow("Ushbu qulayliklar ham standart holatda o‘chiq bo‘ladi."));
-                break;
+        ArrayList<UItem> chat = new ArrayList<>();
+        addSwitchIfMatch(chat, ID_SAVE_DELETED, 0xFFEF4444, R.drawable.msg_delete,
+            "O‘chirilgan xabarlar", "O‘chirilgan xabarlarni «O‘chirilgan» belgisi bilan saqlash",
+            AeroConfig.saveDeletedMessages, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(chat, ID_EDIT_HISTORY, 0xFF22C55E, R.drawable.msg_recent,
+            "Tahrirlar tarixi", "Tahrirlangan xabarni bosib oldingi versiyalarini ko‘rish",
+            AeroConfig.saveEditHistory, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(chat, ID_JUMP_FIRST, 0xFF0EA5E9, R.drawable.msg_go_up,
+            "Birinchi xabarga o‘tish", "Chat menyusiga «Birinchi xabarga o‘tish» tugmasini qo‘shish",
+            AeroConfig.jumpToFirstMessageButton, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(chat, ID_GHOST_BUTTON, 0xFF64748B, R.drawable.msg_stealth_locked,
+            "«Ghost» rejimi tugmasi", "Chatlar ro‘yxati tepasida tez yoqib-o‘chirish tugmasi",
+            AeroConfig.showGhostButtonInChats, AeroRowCell.BADGE_NONE);
+        addNavIfMatch(chat, ID_GHOST_DETAILS, 0xFF6366F1, R.drawable.msg_stories_stealth2,
+            "Ghost Mode batafsil", "O‘qish, yozish, onlayn va story ko‘rinmasligi",
+            AeroConfig.isAnyGhostActive() ? "Yoqiq" : "O‘chiq", AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(chat, ID_CAMERA_HOLD, 0xFFF59E0B, R.drawable.msg_videocall,
+            "Kamerani tanlash", "Video-xabar tugmasini bosib turganda kamerani tanlash",
+            AeroConfig.cameraSwitchOnHold, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(chat, ID_GALLERY_ROUND_VIDEO, 0xFF14B8A6, R.drawable.msg_round_play_m,
+            "Galereyadan dumaloq video", "Galereyadagi videoni dumaloq video-xabar ko‘rinishida yuborish",
+            AeroConfig.galleryRoundVideo, AeroRowCell.BADGE_NEW);
+        addSwitchIfMatch(chat, ID_FWD_NO_AUTHOR, 0xFF06B6D4, R.drawable.msg_forward,
+            "Muallifsiz uzatish", "Uzatilgan xabarda asl muallif nomini yashirish",
+            AeroConfig.forwardWithoutAuthor, AeroRowCell.BADGE_NEW);
+        addSwitchIfMatch(chat, ID_FWD_NO_CAPTION, 0xFF38BDF8, R.drawable.msg_stories_caption,
+            "Sarlavhasiz uzatish", "Media uzatganda tagidagi matnni (caption) olib tashlash",
+            AeroConfig.forwardWithoutCaption, AeroRowCell.BADGE_NONE);
+        if (!chat.isEmpty()) {
+            items.add(UItem.asHeader("CHAT"));
+            items.addAll(chat);
+            items.add(UItem.asShadow(null));
+        }
 
-            case MODE_SECURITY:
-                items.add(UItem.asHeader("Maxfiylik himoyasi"));
-                items.add(UItem.asButtonCheck(
-                    ID_SCREENSHOT_PROTECT,
-                    "Skrinshotdan himoya (FLAG_SECURE)",
-                    "Ekranni rasmga olish va yozib olishni cheklaydi"
-                ).setChecked(AeroConfig.screenshotProtection));
-                items.add(UItem.asShadow("FLAG_SECURE standart holatda o‘chiq bo‘ladi, xohlagan paytingiz yoqib qo‘yishingiz mumkin."));
-                break;
+        ArrayList<UItem> iface = new ArrayList<>();
+        addSwitchIfMatch(iface, ID_HIDE_FOLDERS, 0xFF3B82F6, R.drawable.msg_folders,
+            "Papkalarni yashirish", "Chatlar ro‘yxati tepasidagi papkalar qatorini yashirish",
+            AeroConfig.hideFolders, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(iface, ID_STORIES_PANEL, 0xFF10B981, R.drawable.msg_stories_saved,
+            "Hikoyalar (Stories) paneli", "Chatlar ro‘yxati tepasida hikoyalarni ko‘rsatish",
+            AeroConfig.showStoriesBar, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(iface, ID_MUTUAL_BADGE, 0xFFF59E0B, R.drawable.msg_contacts_name,
+            "O‘zaro kontakt belgisi", "Ikkala tomonlama saqlangan kontaktlar yonida 🤝 belgisi",
+            AeroConfig.showMutualBadge, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(iface, ID_UNLIMITED_PINS, 0xFF22C55E, R.drawable.msg_pin,
+            "Cheksiz qadash (Pin)", "5 tadan ko‘p chatlarni lokal ravishda yuqoriga qadash",
+            AeroConfig.unlimitedPins, AeroRowCell.BADGE_NEW);
+        if (!iface.isEmpty()) {
+            items.add(UItem.asHeader("INTERFEYS"));
+            items.addAll(iface);
+            items.add(UItem.asShadow(null));
+        }
 
-            case MODE_HUB:
-            default:
-                if (heroWrapper != null) {
-                    items.add(UItem.asCustom(heroWrapper));
-                }
-                items.add(UItem.asHeader("Tezkor boshqaruv"));
-                items.add(UItem.asButtonCheck(
-                    ID_QUICK_GHOST,
-                    "Tezkor Ghost Mode",
-                    "Bir bosishda barcha ko‘rinmaslik rejimlarini yoqish yoki o‘chirish"
-                ).setChecked(AeroConfig.isAnyGhostActive()));
-                items.add(UItem.asButtonCheck(
-                    ID_SAVE_DELETED,
-                    "O‘chirilgan xabarlarni saqlash",
-                    "Shaxsiy chat, guruh va kanallarda o‘chirilgan xabarlarni saqlaydi"
-                ).setChecked(AeroConfig.saveDeletedMessages));
-                items.add(UItem.asShadow(null));
+        ArrayList<UItem> msgs = new ArrayList<>();
+        addNavIfMatch(msgs, ID_TEXT_STYLE, 0xFF8B5CF6, R.drawable.msg_edit,
+            "Matn uslubi", "Yuboriladigan xabarlar uchun doimiy format",
+            AeroConfig.getTextStyleLabel(), AeroRowCell.BADGE_NONE);
+        addNavIfMatch(msgs, ID_AUTO_POSTFIX, 0xFFEC4899, R.drawable.msg_stories_caption,
+            "Avto-postfiks", "Har bir chiqish xabari oxiriga imzo qo‘shish",
+            AeroConfig.autoPostfixEnabled ? "Yoqiq" : "O‘chiq", AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(msgs, ID_TRANSLATE_BTN, 0xFF6366F1, R.drawable.msg_translate,
+            "Tarjima tugmasi", "Xabar menyusida tezkor «Tarjima qilish» tugmasi",
+            AeroConfig.showTranslateButton, AeroRowCell.BADGE_NONE);
+        addNavIfMatch(msgs, ID_TRANSLATE_LANG, 0xFF4F46E5, R.drawable.msg_language,
+            "Tarjima tili", null, AeroConfig.getTranslateLanguageLabel(), AeroRowCell.BADGE_NONE);
+        addNavIfMatch(msgs, ID_NEW_ALPHABET, 0xFF0EA5E9, R.drawable.msg_stories_order,
+            "Yangi alifbo (ş ç ō ḡ)", "Chiqish o‘zbekcha matnlarni yangi alifboga o‘girish",
+            AeroConfig.newUzbekAlphabet ? "Yoqiq" : "O‘chiq", AeroRowCell.BADGE_NEW);
+        addSwitchIfMatch(msgs, ID_AUTO_STICKER, 0xFF0D9488, R.drawable.msg_sticker,
+            "Avto-stiker", "Har bir matnli xabardan keyin oxirgi stikerni yuborish",
+            AeroConfig.autoSticker, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(msgs, ID_HEART_EFFECT, 0xFFF43F5E, R.drawable.msg_reactions_filled,
+            "Yurakcha effekti", "Yuborilgan xabarga ❤️ belgisini avtomatik qo‘shish",
+            AeroConfig.heartEffect, AeroRowCell.BADGE_NONE);
+        if (!msgs.isEmpty()) {
+            items.add(UItem.asHeader("XABARLAR"));
+            items.addAll(msgs);
+            items.add(UItem.asShadow(null));
+        }
 
-                items.add(UItem.asHeader("Kengaytirilgan bo‘limlar"));
-                items.add(SettingsActivity.SettingCell.Factory.of(
-                    ID_CAT_GHOST,
-                    IconBackgroundColors.PURPLE.top,
-                    IconBackgroundColors.PURPLE.bottom,
-                    R.drawable.msg_stealth_locked,
-                    "Ghost Mode sozlamalari",
-                    "O‘qish, yozish, onlayn va story ko‘rish",
-                    AeroConfig.isAnyGhostActive() ? "Yoqiq" : "O‘chiq"
-                ));
-                items.add(SettingsActivity.SettingCell.Factory.of(
-                    ID_CAT_ANTI_DELETE,
-                    IconBackgroundColors.RED.top,
-                    IconBackgroundColors.RED.bottom,
-                    R.drawable.msg_delete,
-                    "O‘chirilgan xabarlar (Anti-Delete)",
-                    "O‘chirilgan xabarlarni saqlash va tarixni tozalash",
-                    AeroConfig.saveDeletedMessages ? "Yoqiq" : "O‘chiq"
-                ));
-                items.add(SettingsActivity.SettingCell.Factory.of(
-                    ID_CAT_CHATS,
-                    IconBackgroundColors.GREEN.top,
-                    IconBackgroundColors.GREEN.bottom,
-                    R.drawable.settings_chat,
-                    "Chatlar va Ko‘rinish",
-                    "Uzatish, sekundli vaqt, aniq raqamlar"
-                ));
-                items.add(SettingsActivity.SettingCell.Factory.of(
-                    ID_CAT_SECURITY,
-                    IconBackgroundColors.BLUE_DEEP.top,
-                    IconBackgroundColors.BLUE_DEEP.bottom,
-                    R.drawable.settings_privacy,
-                    "Xavfsizlik va Skrinshot",
-                    "FLAG_SECURE ekran himoyasi",
-                    AeroConfig.screenshotProtection ? "Yoqiq" : "O‘chiq"
-                ));
-                items.add(UItem.asShadow("Barcha AeroGram maxsus funksiyalari dastlab o‘chirilgan bo‘ladi."));
-                items.add(UItem.asButton(ID_RESET_ALL, R.drawable.msg_reset, "AeroGram sozlamalarini standartga qaytarish").red());
-                items.add(UItem.asShadow(null));
-                break;
+        ArrayList<UItem> sec = new ArrayList<>();
+        addSwitchIfMatch(sec, ID_BLOCK_FOREIGN, 0xFFEF4444, R.drawable.msg_block2,
+            "Xorijiy raqamlarni bloklash", "Kontaktda bo‘lmagan chet el raqamlari xabarlarini ovozsiz qilish",
+            AeroConfig.blockForeignNumbers, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(sec, ID_DISABLE_AUTODL, 0xFFD97706, R.drawable.msg_download,
+            "Avtoyuklashni o‘chirish", "Mobil internet va Wi-Fi’da media avtoyuklanishini to‘xtatish",
+            AeroConfig.disableAutoDownload, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(sec, ID_CONFIRM_MEDIA, 0xFFF97316, R.drawable.msg_report,
+            "Yuborishdan oldin so‘rash", "Stiker va GIF yuborishdan oldin tasdiqlash oynasi",
+            AeroConfig.confirmBeforeSendMedia, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(sec, ID_SCREENSHOT_PROTECT, 0xFF2563EB, R.drawable.settings_privacy,
+            "Skrinshotdan himoya (FLAG_SECURE)", "Ekranni rasmga va videoga olishni cheklash",
+            AeroConfig.screenshotProtection, AeroRowCell.BADGE_NONE);
+        if (!sec.isEmpty()) {
+            items.add(UItem.asHeader("XAVFSIZLIK"));
+            items.addAll(sec);
+            items.add(UItem.asShadow(null));
+        }
+
+        ArrayList<UItem> extra = new ArrayList<>();
+        addSwitchIfMatch(extra, ID_CHANNEL_HISTORY, 0xFF4F46E5, R.drawable.msg_recent,
+            "Kanal tarixi tugmasi", "Admin kanallarida «Oxirgi amallar» menyusiga tez o‘tish",
+            AeroConfig.channelHistoryButton, AeroRowCell.BADGE_NEW);
+        addSwitchIfMatch(extra, ID_SECONDS_TIME, 0xFF0891B2, R.drawable.msg_speed,
+            "Vaqtda sekundni ko‘rsatish", "Xabar vaqtini 14:22:08 ko‘rinishida chiqarish",
+            AeroConfig.showSecondsInTime, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(extra, ID_NO_ROUND_NUMS, 0xFF059669, R.drawable.msg_stats,
+            "Raqamlarni yaxlitlamaslik", "14.8K o‘rniga aniq obunachi va ko‘rish soni",
+            AeroConfig.disableNumberRounding, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatch(extra, ID_CONFIRM_CALL, 0xFF7C3AED, R.drawable.msg_calls,
+            "Qo‘ng‘iroqdan oldin tasdiqlash", "Tasodifiy ovozli yoki video qo‘ng‘iroq ketib qolishidan himoya",
+            AeroConfig.confirmBeforeCall, AeroRowCell.BADGE_AERO);
+        addSwitchIfMatch(extra, ID_SHOW_ID_DC, 0xFF0284C7, R.drawable.msg_info,
+            "Xabar ID va Profil DC ko‘rsatish", "Xabarlarda #ID va profilda Telegram ID hamda Data Center",
+            AeroConfig.showIdAndDc, AeroRowCell.BADGE_AERO);
+        addNavIfMatch(extra, ID_SHARE_AERO, 0xFF0EA5E9, R.drawable.msg_link,
+            "AeroGram haqida ulashish", "Ilova tavsifini do‘stlarga yuborish", null, AeroRowCell.BADGE_NEW);
+        if (!extra.isEmpty()) {
+            items.add(UItem.asHeader("FUNKSIYALAR VA AEROGRAM MAXSUS"));
+            items.addAll(extra);
+            items.add(UItem.asShadow("Barcha qo‘shimcha funksiyalar standart holatda o‘chiq bo‘ladi. Faqat o‘zingizga keraklisini yoqing."));
+        }
+
+        if (TextUtils.isEmpty(searchQuery)) {
+            int totalHistory = AeroDeletedStore.getTotalSavedCount() + AeroEditHistoryStore.getTotalCount();
+            items.add(UItem.asButton(ID_CLEAR_HISTORY, R.drawable.msg_delete, "Saqlangan tarixlarni tozalash", totalHistory + " ta").red());
+            items.add(UItem.asButton(ID_RESET_ALL, R.drawable.msg_reset, "AeroGram sozlamalarini standartga qaytarish").red());
+            items.add(UItem.asShadow(null));
         }
     }
 
     @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
         switch (item.id) {
-            case ID_CAT_GHOST:
-                presentFragment(new AeroSettingsActivity(MODE_GHOST));
+            case ID_ABOUT:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_ABOUT));
                 return;
-            case ID_CAT_ANTI_DELETE:
-                presentFragment(new AeroSettingsActivity(MODE_ANTI_DELETE));
+            case ID_ACCOUNTS:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_ACCOUNTS));
                 return;
-            case ID_CAT_CHATS:
-                presentFragment(new AeroSettingsActivity(MODE_CHATS));
+            case ID_GHOST_DETAILS:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_GHOST));
                 return;
-            case ID_CAT_SECURITY:
-                presentFragment(new AeroSettingsActivity(MODE_SECURITY));
+            case ID_TEXT_STYLE:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_TEXT_STYLE));
                 return;
-            case ID_QUICK_GHOST:
-                AeroConfig.toggleMasterGhost(!AeroConfig.isAnyGhostActive());
-                if (AeroConfig.ghostStayOffline) {
-                    MessagesController.getInstance(currentAccount).updateTimerProc();
-                }
-                break;
-            case ID_GHOST_READ:
-                AeroConfig.ghostDontReadMessages = !AeroConfig.ghostDontReadMessages;
-                AeroConfig.saveBool("ghostDontReadMessages", AeroConfig.ghostDontReadMessages);
-                break;
-            case ID_GHOST_TYPING:
-                AeroConfig.ghostDontSendTyping = !AeroConfig.ghostDontSendTyping;
-                AeroConfig.saveBool("ghostDontSendTyping", AeroConfig.ghostDontSendTyping);
-                break;
-            case ID_GHOST_OFFLINE:
-                AeroConfig.ghostStayOffline = !AeroConfig.ghostStayOffline;
-                AeroConfig.saveBool("ghostStayOffline", AeroConfig.ghostStayOffline);
-                MessagesController.getInstance(currentAccount).updateTimerProc();
-                break;
-            case ID_GHOST_READ_ON_INTERACT:
-                AeroConfig.ghostReadOnInteract = !AeroConfig.ghostReadOnInteract;
-                AeroConfig.saveBool("ghostReadOnInteract", AeroConfig.ghostReadOnInteract);
-                break;
-            case ID_GHOST_STORY:
-                AeroConfig.ghostHideStoryViews = !AeroConfig.ghostHideStoryViews;
-                AeroConfig.saveBool("ghostHideStoryViews", AeroConfig.ghostHideStoryViews);
-                break;
+            case ID_AUTO_POSTFIX:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_POSTFIX));
+                return;
+            case ID_TRANSLATE_LANG:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_TRANSLATE_LANG));
+                return;
+            case ID_NEW_ALPHABET:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_NEW_ALPHABET));
+                return;
+
             case ID_SAVE_DELETED:
                 AeroConfig.saveDeletedMessages = !AeroConfig.saveDeletedMessages;
                 AeroConfig.saveBool("saveDeletedMessages", AeroConfig.saveDeletedMessages);
                 getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
                 break;
-            case ID_CLEAR_DELETED:
-                confirmClearDeleted();
-                return;
+            case ID_EDIT_HISTORY:
+                AeroConfig.saveEditHistory = !AeroConfig.saveEditHistory;
+                AeroConfig.saveBool("saveEditHistory", AeroConfig.saveEditHistory);
+                break;
+            case ID_JUMP_FIRST:
+                AeroConfig.jumpToFirstMessageButton = !AeroConfig.jumpToFirstMessageButton;
+                AeroConfig.saveBool("jumpToFirstMessageButton", AeroConfig.jumpToFirstMessageButton);
+                break;
+            case ID_GHOST_BUTTON:
+                AeroConfig.showGhostButtonInChats = !AeroConfig.showGhostButtonInChats;
+                AeroConfig.saveBool("showGhostButtonInChats", AeroConfig.showGhostButtonInChats);
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+                break;
+            case ID_CAMERA_HOLD:
+                AeroConfig.cameraSwitchOnHold = !AeroConfig.cameraSwitchOnHold;
+                AeroConfig.saveBool("cameraSwitchOnHold", AeroConfig.cameraSwitchOnHold);
+                break;
+            case ID_GALLERY_ROUND_VIDEO:
+                AeroConfig.galleryRoundVideo = !AeroConfig.galleryRoundVideo;
+                AeroConfig.saveBool("galleryRoundVideo", AeroConfig.galleryRoundVideo);
+                break;
             case ID_FWD_NO_AUTHOR:
                 AeroConfig.forwardWithoutAuthor = !AeroConfig.forwardWithoutAuthor;
                 AeroConfig.saveBool("forwardWithoutAuthor", AeroConfig.forwardWithoutAuthor);
@@ -413,55 +386,129 @@ public class AeroSettingsActivity extends UniversalFragment {
                 AeroConfig.forwardWithoutCaption = !AeroConfig.forwardWithoutCaption;
                 AeroConfig.saveBool("forwardWithoutCaption", AeroConfig.forwardWithoutCaption);
                 break;
-            case ID_SECONDS_IN_TIME:
-                AeroConfig.showSecondsInTime = !AeroConfig.showSecondsInTime;
-                AeroConfig.saveBool("showSecondsInTime", AeroConfig.showSecondsInTime);
+
+            case ID_HIDE_FOLDERS:
+                AeroConfig.hideFolders = !AeroConfig.hideFolders;
+                AeroConfig.saveBool("hideFolders", AeroConfig.hideFolders);
+                getNotificationCenter().postNotificationName(NotificationCenter.dialogFiltersUpdated);
+                break;
+            case ID_STORIES_PANEL:
+                AeroConfig.showStoriesBar = !AeroConfig.showStoriesBar;
+                AeroConfig.saveBool("showStoriesBar", AeroConfig.showStoriesBar);
+                getNotificationCenter().postNotificationName(NotificationCenter.storiesUpdated);
+                break;
+            case ID_MUTUAL_BADGE:
+                AeroConfig.showMutualBadge = !AeroConfig.showMutualBadge;
+                AeroConfig.saveBool("showMutualBadge", AeroConfig.showMutualBadge);
                 getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
                 break;
-            case ID_NO_ROUND_NUMBERS:
-                AeroConfig.disableNumberRounding = !AeroConfig.disableNumberRounding;
-                AeroConfig.saveBool("disableNumberRounding", AeroConfig.disableNumberRounding);
-                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+            case ID_UNLIMITED_PINS:
+                AeroConfig.unlimitedPins = !AeroConfig.unlimitedPins;
+                AeroConfig.saveBool("unlimitedPins", AeroConfig.unlimitedPins);
+                break;
+
+            case ID_TRANSLATE_BTN:
+                AeroConfig.showTranslateButton = !AeroConfig.showTranslateButton;
+                AeroConfig.saveBool("showTranslateButton", AeroConfig.showTranslateButton);
+                break;
+            case ID_AUTO_STICKER:
+                AeroConfig.autoSticker = !AeroConfig.autoSticker;
+                AeroConfig.saveBool("autoSticker", AeroConfig.autoSticker);
+                break;
+            case ID_HEART_EFFECT:
+                AeroConfig.heartEffect = !AeroConfig.heartEffect;
+                AeroConfig.saveBool("heartEffect", AeroConfig.heartEffect);
+                break;
+
+            case ID_BLOCK_FOREIGN:
+                AeroConfig.blockForeignNumbers = !AeroConfig.blockForeignNumbers;
+                AeroConfig.saveBool("blockForeignNumbers", AeroConfig.blockForeignNumbers);
+                break;
+            case ID_DISABLE_AUTODL:
+                AeroConfig.disableAutoDownload = !AeroConfig.disableAutoDownload;
+                AeroConfig.saveBool("disableAutoDownload", AeroConfig.disableAutoDownload);
+                break;
+            case ID_CONFIRM_MEDIA:
+                AeroConfig.confirmBeforeSendMedia = !AeroConfig.confirmBeforeSendMedia;
+                AeroConfig.saveBool("confirmBeforeSendMedia", AeroConfig.confirmBeforeSendMedia);
                 break;
             case ID_SCREENSHOT_PROTECT:
                 AeroConfig.screenshotProtection = !AeroConfig.screenshotProtection;
                 AeroConfig.saveBool("screenshotProtection", AeroConfig.screenshotProtection);
                 LaunchActivity.invalidateAeroSecurity();
                 break;
+
+            case ID_CHANNEL_HISTORY:
+                AeroConfig.channelHistoryButton = !AeroConfig.channelHistoryButton;
+                AeroConfig.saveBool("channelHistoryButton", AeroConfig.channelHistoryButton);
+                break;
+            case ID_SECONDS_TIME:
+                AeroConfig.showSecondsInTime = !AeroConfig.showSecondsInTime;
+                AeroConfig.saveBool("showSecondsInTime", AeroConfig.showSecondsInTime);
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+                break;
+            case ID_NO_ROUND_NUMS:
+                AeroConfig.disableNumberRounding = !AeroConfig.disableNumberRounding;
+                AeroConfig.saveBool("disableNumberRounding", AeroConfig.disableNumberRounding);
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+                break;
+            case ID_CONFIRM_CALL:
+                AeroConfig.confirmBeforeCall = !AeroConfig.confirmBeforeCall;
+                AeroConfig.saveBool("confirmBeforeCall", AeroConfig.confirmBeforeCall);
+                break;
+            case ID_SHOW_ID_DC:
+                AeroConfig.showIdAndDc = !AeroConfig.showIdAndDc;
+                AeroConfig.saveBool("showIdAndDc", AeroConfig.showIdAndDc);
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+                break;
+            case ID_SHARE_AERO:
+                if (getParentActivity() != null) {
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("text/plain");
+                    intent.putExtra(Intent.EXTRA_TEXT, "AeroGram — Ghost Mode, Anti-Delete, Tahrirlar tarixi va maxsus funksiyali tezkor Telegram!");
+                    getParentActivity().startActivity(Intent.createChooser(intent, LocaleController.getString(R.string.ShareFile)));
+                }
+                return;
+            case ID_CLEAR_HISTORY:
+                confirmClearHistory();
+                return;
             case ID_RESET_ALL:
                 confirmResetAll();
                 return;
             default:
                 return;
         }
-        updateHeroPills();
         listView.adapter.update(true);
     }
 
-    private void confirmClearDeleted() {
+    private void confirmClearHistory() {
+        if (getParentActivity() == null) return;
         new AlertDialog.Builder(getParentActivity())
-            .setTitle("Tarixni tozalash")
-            .setMessage("Saqlangan barcha o‘chirilgan xabarlar belgilari tozalansinmi?")
-            .setPositiveButton(LocaleController.getString(R.string.Clear), (dialog, which) -> {
+            .setTitle("Tarixlarni tozalash")
+            .setMessage("Saqlangan barcha o‘chirilgan xabarlar va tahrirlar tarixi tozalansinmi?")
+            .setPositiveButton(LocaleController.getString(R.string.Clear), (d, w) -> {
                 AeroDeletedStore.clearAll();
-                updateHeroPills();
+                AeroEditHistoryStore.clearAll();
                 listView.adapter.update(true);
-                BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, "Tarix tozalandi").show();
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, "Barcha tarix tozalandi").show();
             })
             .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
             .show();
     }
 
     private void confirmResetAll() {
+        if (getParentActivity() == null) return;
         new AlertDialog.Builder(getParentActivity())
             .setTitle("Standart holatga qaytarish")
-            .setMessage("Barcha AeroGram Settings tugmalari o‘chiriladi (Ghost Mode va Anti-Delete ham).")
-            .setPositiveButton(LocaleController.getString(R.string.OK), (dialog, which) -> {
+            .setMessage("Barcha AeroGram Settings tugmalari dastlabki holatga qaytariladi.")
+            .setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> {
                 AeroConfig.resetAll();
                 LaunchActivity.invalidateAeroSecurity();
-                updateHeroPills();
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+                getNotificationCenter().postNotificationName(NotificationCenter.dialogFiltersUpdated);
+                getNotificationCenter().postNotificationName(NotificationCenter.storiesUpdated);
                 listView.adapter.update(true);
-                BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, "Barcha sozlamalar o‘chirildi").show();
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, "Barcha sozlamalar tiklandi").show();
             })
             .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
             .show();

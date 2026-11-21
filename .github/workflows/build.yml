@@ -57,9 +57,30 @@ jobs:
       - name: Grant Gradle Wrapper Permissions
         run: chmod +x gradlew
 
-      - name: Compile AeroGram Release APK
+      - name: Prepare Private AeroGram Signing Key
+        env:
+          AERO_KEYSTORE_B64: ${{ secrets.AERO_KEYSTORE_B64 }}
         run: |
-          ./gradlew :TMessagesProj_App:assembleAfatRelease --no-daemon --max-workers=2 --stacktrace
+          if [ -n "$AERO_KEYSTORE_B64" ]; then
+            echo "$AERO_KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+            echo "Applied private AeroGram signing keystore."
+          fi
+
+      - name: Compile AeroGram Release APK
+        env:
+          AERO_STORE_PASS: ${{ secrets.AERO_STORE_PASS }}
+          AERO_KEY_ALIAS: ${{ secrets.AERO_KEY_ALIAS }}
+          AERO_KEY_PASS: ${{ secrets.AERO_KEY_PASS }}
+        run: |
+          if [ -n "$AERO_STORE_PASS" ]; then
+            ./gradlew :TMessagesProj_App:assembleAfatRelease \
+              -PRELEASE_STORE_PASSWORD="$AERO_STORE_PASS" \
+              -PRELEASE_KEY_ALIAS="$AERO_KEY_ALIAS" \
+              -PRELEASE_KEY_PASSWORD="$AERO_KEY_PASS" \
+              --no-daemon --max-workers=2 --stacktrace
+          else
+            ./gradlew :TMessagesProj_App:assembleAfatRelease --no-daemon --max-workers=2 --stacktrace
+          fi
 
       - name: Upload AeroGram APK Artifact
         uses: actions/upload-artifact@v4
