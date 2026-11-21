@@ -4541,7 +4541,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             boolean sent = args.length > 3 && (Boolean) args[3];
             long channelId = (Long) args[1];
             ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>) args[0];
-            if (!sent && AeroConfig.saveDeletedMessages) {
+            if (!sent && org.telegram.messenger.AeroConfig.saveDeletedMessages) {
                 return;
             }
             boolean reset = false;
