@@ -12453,17 +12453,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             newVisibility = !onlySelfStories && getStoriesController().hasStories();
             onlySelfStories = getStoriesController().hasOnlySelfStories();
         }
+        final boolean effectiveNewVisibility = AeroConfig.showStoriesBar && newVisibility;
         if (!AeroConfig.showStoriesBar) {
-            newVisibility = false;
             onlySelfStories = false;
         }
 
         hasOnlySlefStories = onlySelfStories;
 
         boolean oldStoriesCellVisibility = dialogStoriesCellVisible;
-        dialogStoriesCellVisible = onlySelfStories || newVisibility;
+        dialogStoriesCellVisible = onlySelfStories || effectiveNewVisibility;
 
-        if (newVisibility || dialogStoriesCellVisible) {
+        if (effectiveNewVisibility || dialogStoriesCellVisible) {
             dialogStoriesCell.updateItems(animated, dialogStoriesCellVisible != oldStoriesCellVisibility);
         }
         if (dialogStoriesCellVisible != oldStoriesCellVisibility) {
@@ -12507,19 +12507,19 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
         }
-        if (newVisibility == animateToHasStories) {
+        if (effectiveNewVisibility == animateToHasStories) {
             return;
         }
-        animateToHasStories = newVisibility;
+        animateToHasStories = effectiveNewVisibility;
 
-        if (newVisibility) {
+        if (effectiveNewVisibility) {
             dialogStoriesCell.setProgressToCollapse(1f, false);
         }
         if (animated && !isInPreviewMode()) {
             dialogStoriesCell.setVisibility(View.VISIBLE);
             float fromScrollY = -scrollYOffset;
             float toScrollY;
-            if (!newVisibility) {
+            if (!effectiveNewVisibility) {
                 toScrollY = getMaxScrollYOffset();
             } else {
                 toScrollY = 0;
@@ -12532,7 +12532,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 @Override
                 public void onAnimationUpdate(@NonNull ValueAnimator animation) {
                     progressToShowStories = (float) animation.getAnimatedValue();
-                    if (!newVisibility) {
+                    if (!effectiveNewVisibility) {
                         progressToShowStories = 1f - progressToShowStories;
                     }
                     int newValue = (int) AndroidUtilities.lerp(fromScrollY, toScrollY, (float) animation.getAnimatedValue());
@@ -12548,11 +12548,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     storiesVisibilityAnimator = null;
-                    hasStories = newVisibility;
+                    hasStories = effectiveNewVisibility;
                     if (!hasStories && !hasOnlySlefStories) {
                         dialogStoriesCell.setVisibility(View.GONE);
                     }
-                    if (!newVisibility) {
+                    if (!effectiveNewVisibility) {
                         setScrollY(0);
                         scrollAdditionalOffset = dp(DialogStoriesCell.HEIGHT_IN_DP);
                     } else {
@@ -12573,10 +12573,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             storiesVisibilityAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
             storiesVisibilityAnimator.start();
         } else {
-            progressToShowStories = newVisibility ? 1f : 0;
-            hasStories = newVisibility;
+            progressToShowStories = effectiveNewVisibility ? 1f : 0;
+            hasStories = effectiveNewVisibility;
             dialogStoriesCell.setVisibility((hasStories || hasOnlySlefStories) && !isInPreviewMode() ? View.VISIBLE : View.GONE);
-            if (!newVisibility) {
+            if (!effectiveNewVisibility) {
                 setScrollY(0);
             } else {
                 scrollAdditionalOffset = -dp(DialogStoriesCell.HEIGHT_IN_DP);
