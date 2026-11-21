@@ -222,6 +222,9 @@ public class TranscribeButton {
             parent.invalidate();
         }
         pressed = false;
+        if (!org.telegram.messenger.AeroConfig.voiceToTextEnabled) {
+            return;
+        }
         if (processClick) {
             if (!premium && toOpen) {
                 if (canTranscribeTrial(parent.getMessageObject()) || parent.getMessageObject() != null && parent.getMessageObject().messageOwner != null && !TextUtils.isEmpty(parent.getMessageObject().messageOwner.voiceTranscription)) {

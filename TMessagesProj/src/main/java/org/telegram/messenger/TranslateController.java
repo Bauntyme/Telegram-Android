@@ -91,7 +91,7 @@ public class TranslateController extends BaseController {
     }
 
     public boolean isFeatureAvailable() {
-        return isChatTranslateEnabled() && UserConfig.getInstance(currentAccount).isPremium();
+        return isChatTranslateEnabled() && (UserConfig.getInstance(currentAccount).isPremium() || AeroConfig.autoTranslate || AeroConfig.translateWholeChat);
     }
 
     public boolean isFeatureAvailable(long dialogId) {
@@ -100,6 +100,8 @@ public class TranslateController extends BaseController {
         }
         final TLRPC.Chat chat = getMessagesController().getChat(-dialogId);
         return (
+            AeroConfig.autoTranslate ||
+            AeroConfig.translateWholeChat ||
             UserConfig.getInstance(currentAccount).isPremium() ||
             chat != null && chat.autotranslation
         );
@@ -119,6 +121,9 @@ public class TranslateController extends BaseController {
     }
 
     public boolean isContextTranslateEnabled() {
+        if (AeroConfig.autoTranslate || AeroConfig.translateWholeChat) {
+            return true;
+        }
         if (!getMessagesController().isTranslationsManualEnabled()) {
             return false;
         }
@@ -225,7 +230,8 @@ public class TranslateController extends BaseController {
     }
 
     public boolean isTranslatingDialog(long dialogId) {
-        return isFeatureAvailable(dialogId) && translatingDialogs.get(dialogId, isChatAutoTranslated(dialogId));
+        boolean defaultAuto = isChatAutoTranslated(dialogId) || (AeroConfig.autoTranslate && isDialogTranslatable(dialogId));
+        return isFeatureAvailable(dialogId) && translatingDialogs.get(dialogId, defaultAuto);
     }
 
     public void toggleTranslatingDialog(long dialogId) {
@@ -265,6 +271,9 @@ public class TranslateController extends BaseController {
 
     public String getDialogTranslateTo(long dialogId) {
         String lang = translateDialogLanguage.get(dialogId);
+        if (lang == null && AeroConfig.autoTranslate && !TextUtils.isEmpty(AeroConfig.translateTargetLang)) {
+            lang = AeroConfig.translateTargetLang;
+        }
         if (lang == null) {
             lang = TranslateAlert2.getToLanguage();
             if (lang == null || lang.equals(getDialogDetectedLanguage(dialogId))) {

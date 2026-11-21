@@ -9961,6 +9961,63 @@ public class MessagesStorage extends BaseController {
                     }
                 }
 
+                if (AeroConfig.saveDeletedMessages && processMessages && mode == ChatActivity.MODE_DEFAULT && threadMessageId == 0) {
+                    try {
+                        ensureAeroDeletedTable();
+                        HashSet<Integer> existingMids = new HashSet<>(res.messages.size());
+                        for (int idx = 0; idx < res.messages.size(); idx++) {
+                            existingMids.add(res.messages.get(idx).id);
+                        }
+                        String aeroQuery;
+                        if (minId != Integer.MAX_VALUE && maxId != Integer.MIN_VALUE) {
+                            if (load_type == LOAD_BACKWARD && max_id == 0 && minDate == 0) {
+                                aeroQuery = String.format(Locale.US, "SELECT mid, date, out_msg, data FROM aero_deleted_v1 WHERE uid = %d AND mid >= %d ORDER BY date DESC, mid DESC LIMIT 50", dialogId, minId);
+                            } else {
+                                aeroQuery = String.format(Locale.US, "SELECT mid, date, out_msg, data FROM aero_deleted_v1 WHERE uid = %d AND mid >= %d AND mid <= %d", dialogId, minId, maxId);
+                            }
+                        } else if (max_id > 0 && load_type == LOAD_BACKWARD) {
+                            aeroQuery = String.format(Locale.US, "SELECT mid, date, out_msg, data FROM aero_deleted_v1 WHERE uid = %d AND mid < %d ORDER BY date DESC, mid DESC LIMIT 30", dialogId, max_id);
+                        } else if (load_type == LOAD_BACKWARD && max_id == 0 && minDate == 0) {
+                            aeroQuery = String.format(Locale.US, "SELECT mid, date, out_msg, data FROM aero_deleted_v1 WHERE uid = %d ORDER BY date DESC, mid DESC LIMIT 30", dialogId);
+                        } else {
+                            aeroQuery = null;
+                        }
+                        if (aeroQuery != null) {
+                            SQLiteCursor aeroCursor = database.queryFinalized(aeroQuery);
+                            while (aeroCursor.next()) {
+                                int mid = aeroCursor.intValue(0);
+                                AeroDeletedStore.markDeleted(currentAccount, dialogId, mid);
+                                if (existingMids.contains(mid)) {
+                                    continue;
+                                }
+                                NativeByteBuffer data = aeroCursor.byteBufferValue(3);
+                                if (data != null) {
+                                    TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                                    if (message != null) {
+                                        message.id = mid;
+                                        message.date = aeroCursor.intValue(1);
+                                        message.dialog_id = dialogId;
+                                        if (dialogId == currentUserId || aeroCursor.intValue(2) == 1) {
+                                            message.out = true;
+                                        }
+                                        message.unread = false;
+                                        message.send_state = 0;
+                                        message.readAttachPath(data, currentUserId);
+                                        res.messages.add(message);
+                                        existingMids.add(mid);
+                                        messagesCount++;
+                                        addUsersAndChatsFromMessage(message, usersToLoad, chatsToLoad, animatedEmojiToLoad);
+                                    }
+                                    data.reuse();
+                                }
+                            }
+                            aeroCursor.dispose();
+                        }
+                    } catch (Exception e) {
+                        checkSQLException(e);
+                    }
+                }
+
                 Collections.sort(res.messages, (lhs, rhs) -> {
                     if (MessageObject.isEphemeralMessageId(lhs.id) || MessageObject.isEphemeralMessageId(rhs.id)) {
                         if (lhs.date > rhs.date) {
@@ -15495,6 +15552,131 @@ public class MessagesStorage extends BaseController {
         executeInStorageQueue(() -> updateDialogsWithDeletedMessagesInternal(dialogId, channelId, messages, additionalDialogsToUpdate));
     }
 
+    private boolean aeroDeletedTableCreated = false;
+
+    private void ensureAeroDeletedTable() {
+        if (aeroDeletedTableCreated || database == null) {
+            return;
+        }
+        try {
+            database.executeFast("CREATE TABLE IF NOT EXISTS aero_deleted_v1(uid INTEGER, mid INTEGER, date INTEGER, out_msg INTEGER, data BLOB, PRIMARY KEY(uid, mid))").stepThis().dispose();
+            aeroDeletedTableCreated = true;
+        } catch (Exception e) {
+            checkSQLException(e);
+        }
+    }
+
+    public void preserveDeletedMessages(long dialogId, ArrayList<Integer> messages) {
+        if (messages == null || messages.isEmpty() || database == null) {
+            return;
+        }
+        storageQueue.postRunnable(() -> {
+            SQLiteCursor cursor = null;
+            SQLitePreparedStatement state = null;
+            SQLitePreparedStatement insState = null;
+            try {
+                ensureAeroDeletedTable();
+                long currentUser = getUserConfig().getClientUserId();
+                String ids = TextUtils.join(",", messages);
+                if (dialogId != 0) {
+                    cursor = database.queryFinalized(String.format(Locale.US, "SELECT uid, data, read_state, out, mid, date FROM messages_v2 WHERE mid IN(%s) AND uid = %d", ids, dialogId));
+                } else {
+                    cursor = database.queryFinalized(String.format(Locale.US, "SELECT uid, data, read_state, out, mid, date FROM messages_v2 WHERE mid IN(%s) AND is_channel = 0", ids));
+                }
+                LongSparseArray<Integer[]> dialogsToUpdate = new LongSparseArray<>();
+                insState = database.executeFast("REPLACE INTO aero_deleted_v1 VALUES(?, ?, ?, ?, ?)");
+                while (cursor.next()) {
+                    long did = cursor.longValue(0);
+                    int mid = cursor.intValue(4);
+                    int readState = cursor.intValue(2);
+                    int outVal = cursor.intValue(3);
+                    int dateVal = cursor.intValue(5);
+
+                    AeroDeletedStore.markDeleted(currentAccount, did, mid);
+
+                    NativeByteBuffer data = cursor.byteBufferValue(1);
+                    if (data != null) {
+                        TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                        if (message != null) {
+                            message.readAttachPath(data, currentUser);
+                            NativeByteBuffer saveBuf = new NativeByteBuffer(message.getObjectSize());
+                            message.serializeToStream(saveBuf);
+                            insState.requery();
+                            insState.bindLong(1, did);
+                            insState.bindInteger(2, mid);
+                            insState.bindInteger(3, dateVal != 0 ? dateVal : message.date);
+                            insState.bindInteger(4, outVal);
+                            insState.bindByteBuffer(5, saveBuf);
+                            insState.step();
+                            saveBuf.reuse();
+                        }
+                        data.reuse();
+                    }
+                    if (did != currentUser && outVal == 0) {
+                        Integer[] counts = dialogsToUpdate.get(did);
+                        if (counts == null) {
+                            counts = new Integer[]{0, 0};
+                            dialogsToUpdate.put(did, counts);
+                        }
+                        if (readState < 2) {
+                            counts[1]++;
+                        }
+                        if (readState == 0 || readState == 2) {
+                            counts[0]++;
+                        }
+                    }
+                }
+                cursor.dispose();
+                cursor = null;
+                insState.dispose();
+                insState = null;
+
+                for (int a = 0; a < dialogsToUpdate.size(); a++) {
+                    long did = dialogsToUpdate.keyAt(a);
+                    Integer[] counts = dialogsToUpdate.valueAt(a);
+                    if (counts[0] == 0 && counts[1] == 0) {
+                        continue;
+                    }
+                    cursor = database.queryFinalized("SELECT unread_count, unread_count_i FROM dialogs WHERE did = " + did);
+                    int oldUnread = 0;
+                    int oldMentions = 0;
+                    if (cursor.next()) {
+                        oldUnread = cursor.intValue(0);
+                        oldMentions = cursor.intValue(1);
+                    }
+                    cursor.dispose();
+                    cursor = null;
+
+                    state = database.executeFast("UPDATE dialogs SET unread_count = ?, unread_count_i = ? WHERE did = ?");
+                    state.requery();
+                    state.bindInteger(1, Math.max(0, oldUnread - counts[0]));
+                    state.bindInteger(2, Math.max(0, oldMentions - counts[1]));
+                    state.bindLong(3, did);
+                    state.step();
+                    state.dispose();
+                    state = null;
+                }
+                if (dialogsToUpdate.size() > 0) {
+                    AndroidUtilities.runOnUIThread(() -> {
+                        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+                    });
+                }
+            } catch (Exception e) {
+                checkSQLException(e);
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
+                if (insState != null) {
+                    insState.dispose();
+                }
+                if (state != null) {
+                    state.dispose();
+                }
+            }
+        });
+    }
+
     public ArrayList<Long> markMessagesAsDeleted(long dialogId, ArrayList<Integer> messages, boolean useQueue, boolean deleteFiles, int mode, int topicId) {
         if (messages.isEmpty()) {
             return null;
@@ -16465,6 +16647,19 @@ public class MessagesStorage extends BaseController {
                                     TLRPC.Message oldMessage = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
                                     oldMessage.readAttachPath(data, getUserConfig().clientUserId);
                                     data.reuse();
+                                    if (AeroConfig.saveEditHistory && oldMessage != null && message != null && message.id > 0) {
+                                        String oldTxt = oldMessage.message;
+                                        String newTxt = message.message;
+                                        if (!TextUtils.isEmpty(oldTxt) && !TextUtils.equals(oldTxt, newTxt)) {
+                                            int editTs = message.edit_date > 0 ? message.edit_date : getConnectionsManager().getCurrentTime();
+                                            long edDid = MessageObject.getDialogId(message);
+                                            if (AeroEditHistoryStore.recordPreviousVersion(currentAccount, edDid, message.id, editTs, oldTxt)) {
+                                                final long notifyDid = edDid;
+                                                final int notifyMid = message.id;
+                                                AndroidUtilities.runOnUIThread(() -> getMessagesController().notifyAeroMessageEdited(notifyDid, notifyMid));
+                                            }
+                                        }
+                                    }
                                     if (reactionUpdates != null) {
                                         reactionUpdates.add(new SavedReactionsUpdate(selfId, oldMessage, message));
                                     }

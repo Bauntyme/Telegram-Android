@@ -4,136 +4,110 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AeroDeletedStore {
-
-    private static final String PREFS_NAME = "aerogram_deleted_messages";
-    private static final ConcurrentHashMap<String, Set<Integer>> cache = new ConcurrentHashMap<>();
+    private static final String PREFS_NAME = "aero_deleted_messages";
     private static SharedPreferences prefs;
-    private static volatile boolean loaded = false;
+    private static final ConcurrentHashMap<String, Set<Integer>> cache = new ConcurrentHashMap<>();
 
-    public static synchronized void init(Context context) {
-        if (loaded || context == null) {
+    public static void init(Context context) {
+        if (prefs != null) {
             return;
         }
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        Map<String, ?> all = prefs.getAll();
-        if (all != null) {
-            for (Map.Entry<String, ?> entry : all.entrySet()) {
-                Object val = entry.getValue();
-                if (val instanceof Set<?>) {
-                    Set<Integer> ids = Collections.newSetFromMap(new ConcurrentHashMap<>());
-                    for (Object item : (Set<?>) val) {
-                        if (item instanceof String) {
+        try {
+            Map<String, ?> all = prefs.getAll();
+            if (all != null) {
+                for (Map.Entry<String, ?> entry : all.entrySet()) {
+                    if (entry.getValue() instanceof Set<?>) {
+                        Set<Integer> set = ConcurrentHashMap.newKeySet();
+                        for (Object o : (Set<?>) entry.getValue()) {
                             try {
-                                ids.add(Integer.parseInt((String) item));
-                            } catch (NumberFormatException ignored) {
+                                set.add(Integer.parseInt(String.valueOf(o)));
+                            } catch (Exception ignore) {
                             }
                         }
-                    }
-                    if (!ids.isEmpty()) {
-                        cache.put(entry.getKey(), ids);
+                        cache.put(entry.getKey(), set);
                     }
                 }
             }
-        }
-        loaded = true;
-    }
-
-    private static void ensureInit() {
-        if (!loaded && ApplicationLoader.applicationContext != null) {
-            init(ApplicationLoader.applicationContext);
+        } catch (Exception ignore) {
         }
     }
 
-    private static String keyFor(int account, long dialogId) {
+    private static String key(int account, long dialogId) {
         return account + "_" + dialogId;
     }
 
-    public static void markDeleted(int account, long dialogId, int msgId) {
-        ensureInit();
-        String key = keyFor(account, dialogId);
-        Set<Integer> set = cache.get(key);
-        if (set == null) {
-            set = Collections.newSetFromMap(new ConcurrentHashMap<>());
-            Set<Integer> prev = cache.putIfAbsent(key, set);
-            if (prev != null) {
-                set = prev;
-            }
+    public static synchronized void markDeleted(int account, long dialogId, int msgId) {
+        if (dialogId == 0 || msgId <= 0) {
+            return;
         }
-        if (set.add(msgId)) {
-            persistKey(key, set);
+        String k = key(account, dialogId);
+        Set<Integer> set = cache.get(k);
+        if (set == null) {
+            set = ConcurrentHashMap.newKeySet();
+            cache.put(k, set);
+        }
+        if (!set.add(msgId)) {
+            return;
+        }
+        if (prefs != null) {
+            Set<String> strSet = new HashSet<>(set.size());
+            for (Integer id : set) {
+                strSet.add(String.valueOf(id));
+            }
+            prefs.edit().putStringSet(k, strSet).apply();
         }
     }
 
-    public static void markDeleted(int account, long dialogId, ArrayList<Integer> msgIds) {
-        if (msgIds == null || msgIds.isEmpty()) {
+    public static synchronized void markDeleted(int account, long dialogId, ArrayList<Integer> msgIds) {
+        if (dialogId == 0 || msgIds == null || msgIds.isEmpty()) {
             return;
         }
-        ensureInit();
-        String key = keyFor(account, dialogId);
-        Set<Integer> set = cache.get(key);
+        String k = key(account, dialogId);
+        Set<Integer> set = cache.get(k);
         if (set == null) {
-            set = Collections.newSetFromMap(new ConcurrentHashMap<>());
-            Set<Integer> prev = cache.putIfAbsent(key, set);
-            if (prev != null) {
-                set = prev;
-            }
+            set = ConcurrentHashMap.newKeySet();
+            cache.put(k, set);
         }
         boolean changed = false;
         for (int i = 0; i < msgIds.size(); i++) {
             Integer id = msgIds.get(i);
-            if (id != null && set.add(id)) {
+            if (id != null && id > 0 && set.add(id)) {
                 changed = true;
             }
         }
-        if (changed) {
-            persistKey(key, set);
+        if (changed && prefs != null) {
+            Set<String> strSet = new HashSet<>(set.size());
+            for (Integer id : set) {
+                strSet.add(String.valueOf(id));
+            }
+            prefs.edit().putStringSet(k, strSet).apply();
         }
-    }
-
-    private static void persistKey(String key, Set<Integer> set) {
-        if (prefs == null) {
-            return;
-        }
-        Set<String> stringSet = new HashSet<>(set.size());
-        for (Integer id : set) {
-            stringSet.add(String.valueOf(id));
-        }
-        prefs.edit().putStringSet(key, stringSet).apply();
     }
 
     public static boolean isDeleted(int account, long dialogId, int msgId) {
-        ensureInit();
-        Set<Integer> direct = cache.get(keyFor(account, dialogId));
-        if (direct != null && direct.contains(msgId)) {
-            return true;
+        if (dialogId == 0 || msgId <= 0) {
+            return false;
         }
-        if (dialogId >= 0L) {
-            Set<Integer> mailbox = cache.get(keyFor(account, 0L));
-            if (mailbox != null && mailbox.contains(msgId)) {
-                return true;
-            }
-        }
-        return false;
+        Set<Integer> set = cache.get(key(account, dialogId));
+        return set != null && set.contains(msgId);
     }
 
-    public static int getTotalSavedCount() {
-        ensureInit();
-        int total = 0;
+    public static synchronized int getTotalSavedCount() {
+        int count = 0;
         for (Set<Integer> set : cache.values()) {
-            total += set.size();
+            count += set.size();
         }
-        return total;
+        return count;
     }
 
-    public static void clearAll() {
-        ensureInit();
+    public static synchronized void clearAll() {
         cache.clear();
         if (prefs != null) {
             prefs.edit().clear().apply();

@@ -795,8 +795,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
         }
 
-        items.add(SettingCell.Factory.of(777, 0xFFF59E0B, 0xFFD97706, R.drawable.ic_aerogram_monochrome, "AeroGram Settings", null));
-        items.add(SettingCell.Factory.of(778, 0xFF0EA5E9, 0xFF0284C7, R.drawable.msg_stats, "AeroGram Statistika", null));
+        items.add(SettingCell.Factory.of(777, 0xFFF59E0B, 0xFFD97706, R.drawable.ic_aerogram_monochrome, org.telegram.messenger.AeroConfig.tr("AeroGram Sozlamalari", "AeroGram Созламалари"), null));
+        items.add(SettingCell.Factory.of(778, 0xFF8B5CF6, 0xFF6D28D9, R.drawable.msg_bots, org.telegram.messenger.AeroConfig.tr("AeroGram Botlari", "AeroGram Ботлари"), null));
+        items.add(SettingCell.Factory.of(779, 0xFF0EA5E9, 0xFF0284C7, R.drawable.msg_stats, org.telegram.messenger.AeroConfig.tr("AeroGram Analitika", "AeroGram Аналитика"), null));
         items.add(UItem.asShadow(null));
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
@@ -925,6 +926,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 presentSettingFragment(new AeroSettingsActivity());
                 break;
             case 778:
+                presentSettingFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_BOTS));
+                break;
+            case 779:
                 presentSettingFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_STATS));
                 break;
             case 1:

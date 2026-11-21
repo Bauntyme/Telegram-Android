@@ -14619,6 +14619,31 @@ public class MessagesController extends BaseController implements NotificationCe
         }
     }
 
+    public void notifyAeroMessageEdited(long dialogId, int msgId) {
+        if (!AeroConfig.saveEditHistory || dialogId == 0 || msgId <= 0) {
+            return;
+        }
+        MessageObject target = dialogMessagesByIds.get(msgId);
+        if (target == null || target.getDialogId() != dialogId) {
+            ArrayList<MessageObject> list = dialogMessage.get(dialogId);
+            if (list != null) {
+                for (int i = 0; i < list.size(); i++) {
+                    MessageObject m = list.get(i);
+                    if (m != null && m.getId() == msgId) {
+                        target = m;
+                        break;
+                    }
+                }
+            }
+        }
+        if (target != null) {
+            target.refreshAeroEditHistoryDisplay();
+            ArrayList<MessageObject> arr = new ArrayList<>(1);
+            arr.add(target);
+            getNotificationCenter().postNotificationName(NotificationCenter.replaceMessagesObjects, dialogId, arr, false);
+        }
+    }
+
     private void completeReadTask(ReadTask task) {
         if (AeroConfig.ghostDontReadMessages && !aeroForceNextReadTask) {
             return;
@@ -21078,8 +21103,13 @@ public class MessagesController extends BaseController implements NotificationCe
                                         String oldText = oldObject.messageOwner.message;
                                         String newText = newMessage.messageOwner.message;
                                         if (oldText != null && !oldText.equals(newText)) {
-                                            int editTs = oldObject.messageOwner.edit_date > 0 ? oldObject.messageOwner.edit_date : oldObject.messageOwner.date;
+                                            int editTs = newMessage.messageOwner.edit_date > 0
+                                                ? newMessage.messageOwner.edit_date
+                                                : (oldObject.messageOwner.edit_date > 0 ? oldObject.messageOwner.edit_date : oldObject.messageOwner.date);
                                             AeroEditHistoryStore.recordPreviousVersion(currentAccount, oldObject.getDialogId(), oldObject.getId(), editTs, oldText);
+                                        }
+                                        if (AeroEditHistoryStore.hasHistory(currentAccount, newMessage.getDialogId(), newMessage.getId())) {
+                                            newMessage.refreshAeroEditHistoryDisplay();
                                         }
                                     }
                                     oldObjects.set(i, newMessage);
@@ -21257,33 +21287,59 @@ public class MessagesController extends BaseController implements NotificationCe
                         continue;
                     }
                     if (AeroConfig.saveDeletedMessages) {
-                        AeroDeletedStore.markDeleted(currentAccount, dialogId, arrayList);
-                    }
-                    getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
-                    if (dialogId == 0) {
-                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                            Integer id = arrayList.get(b);
-                            MessageObject obj = dialogMessagesByIds.get(id);
-                            if (obj != null) {
-                                if (BuildVars.LOGS_ENABLED) {
-                                    FileLog.d("mark messages " + obj.getId() + " deleted");
-                                }
-                                obj.deleted = true;
-                                if (AeroConfig.saveDeletedMessages) {
+                        if (dialogId != 0) {
+                            AeroDeletedStore.markDeleted(currentAccount, dialogId, arrayList);
+                        }
+                        if (dialogId == 0) {
+                            for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                Integer id = arrayList.get(b);
+                                MessageObject obj = dialogMessagesByIds.get(id);
+                                if (obj != null) {
+                                    obj.aeroDeleted = true;
                                     AeroDeletedStore.markDeleted(currentAccount, obj.getDialogId(), obj.getId());
                                 }
                             }
+                        } else {
+                            ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+                            if (objs != null) {
+                                for (int i = 0; i < objs.size(); ++i) {
+                                    MessageObject obj = objs.get(i);
+                                    if (obj != null) {
+                                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                            if (obj.getId() == arrayList.get(b)) {
+                                                obj.aeroDeleted = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
                     } else {
-                        ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
-                        if (objs != null) {
-                            for (int i = 0; i < objs.size(); ++i) {
-                                MessageObject obj = objs.get(i);
+                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
+                        if (dialogId == 0) {
+                            for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                Integer id = arrayList.get(b);
+                                MessageObject obj = dialogMessagesByIds.get(id);
                                 if (obj != null) {
-                                    for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                                        if (obj.getId() == arrayList.get(b)) {
-                                            obj.deleted = true;
-                                            break;
+                                    if (BuildVars.LOGS_ENABLED) {
+                                        FileLog.d("mark messages " + obj.getId() + " deleted");
+                                    }
+                                    obj.deleted = true;
+                                }
+                            }
+                        } else {
+                            ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+                            if (objs != null) {
+                                for (int i = 0; i < objs.size(); ++i) {
+                                    MessageObject obj = objs.get(i);
+                                    if (obj != null) {
+                                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                            if (obj.getId() == arrayList.get(b)) {
+                                                obj.deleted = true;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
@@ -21291,7 +21347,9 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                     }
                 }
-                getNotificationsController().removeDeletedMessagesFromNotifications(deletedMessagesFinal, false);
+                if (!AeroConfig.saveDeletedMessages) {
+                    getNotificationsController().removeDeletedMessagesFromNotifications(deletedMessagesFinal, false);
+                }
             }
             if (deletedQuickRepliesMessagesFinal != null) {
                 for (int a = 0, size = deletedQuickRepliesMessagesFinal.size(); a < size; a++) {
@@ -21375,14 +21433,22 @@ public class MessagesController extends BaseController implements NotificationCe
                 getMessagesStorage().markMessagesContentAsRead(key, arrayList, currentTime2, markContentAsReadMessagesDate);
             }
         }
-        if (deletedMessages != null && !AeroConfig.saveDeletedMessages) {
-            for (int a = 0, size = deletedMessages.size(); a < size; a++) {
-                long key = deletedMessages.keyAt(a);
-                ArrayList<Integer> arrayList = deletedMessages.valueAt(a);
-                getMessagesStorage().getStorageQueue().postRunnable(() -> {
-                    ArrayList<Long> dialogIds = getMessagesStorage().markMessagesAsDeleted(key, arrayList, false, true, 0, 0);
-                    getMessagesStorage().updateDialogsWithDeletedMessages(key, -key, arrayList, dialogIds);
-                });
+        if (deletedMessages != null) {
+            if (!AeroConfig.saveDeletedMessages) {
+                for (int a = 0, size = deletedMessages.size(); a < size; a++) {
+                    long key = deletedMessages.keyAt(a);
+                    ArrayList<Integer> arrayList = deletedMessages.valueAt(a);
+                    getMessagesStorage().getStorageQueue().postRunnable(() -> {
+                        ArrayList<Long> dialogIds = getMessagesStorage().markMessagesAsDeleted(key, arrayList, false, true, 0, 0);
+                        getMessagesStorage().updateDialogsWithDeletedMessages(key, -key, arrayList, dialogIds);
+                    });
+                }
+            } else {
+                for (int a = 0, size = deletedMessages.size(); a < size; a++) {
+                    long key = deletedMessages.keyAt(a);
+                    ArrayList<Integer> arrayList = deletedMessages.valueAt(a);
+                    getMessagesStorage().preserveDeletedMessages(key, arrayList);
+                }
             }
         }
         if (deletedQuickReplyMessages != null) {

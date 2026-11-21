@@ -400,6 +400,12 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
             }
         }
         onImportersChanged(lastQuery, fromCache, false);
+        if (!fromCache && org.telegram.messenger.AeroConfig.autoAcceptJoinRequests && importers != null && importers.importers != null && !importers.importers.isEmpty()) {
+            ArrayList<TLRPC.TL_chatInviteImporter> toApprove = new ArrayList<>(importers.importers);
+            for (int k = 0; k < toApprove.size(); k++) {
+                hideChatJoinRequest(toApprove.get(k), true);
+            }
+        }
         hasMore = currentImporters.size() < importers.count;
         if (hadMore != (!currentImporters.isEmpty() && hasMore)) {
             if (hasMore) {

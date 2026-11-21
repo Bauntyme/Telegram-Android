@@ -15595,8 +15595,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (AeroConfig.showIdAndDc && current.getId() > 0) {
             baseTime = "#" + current.getId() + " • " + baseTime;
         }
-        if (AeroConfig.saveDeletedMessages && (current.deleted || AeroDeletedStore.isDeleted(current.currentAccount, current.getDialogId(), current.getId()))) {
-            return "\uD83D\uDDD1 O‘chirilgan • " + baseTime;
+        if (AeroConfig.saveDeletedMessages && (current.isAeroDeleted() || AeroDeletedStore.isDeleted(current.currentAccount, current.getDialogId(), current.getId()))) {
+            return (AeroConfig.uiCyrillic ? "\uD83D\uDDD1 Ўчирилган • " : "\uD83D\uDDD1 O‘chirilgan • ") + baseTime;
         }
         return baseTime;
     }

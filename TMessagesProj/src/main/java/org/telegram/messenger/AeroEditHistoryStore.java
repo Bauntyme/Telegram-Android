@@ -8,155 +8,147 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AeroEditHistoryStore {
+    private static final String PREFS_NAME = "aero_edit_history";
+    private static final int MAX_VERSIONS_PER_MSG = 20;
+    private static SharedPreferences prefs;
+    private static final ConcurrentHashMap<String, ArrayList<EditEntry>> memoryCache = new ConcurrentHashMap<>();
 
     public static class EditEntry {
-        public final int date;
+        public final int editDate;
         public final String text;
 
-        public EditEntry(int date, String text) {
-            this.date = date;
+        public EditEntry(int editDate, String text) {
+            this.editDate = editDate;
             this.text = text;
         }
     }
 
-    private static final String PREFS_NAME = "aerogram_edit_history";
-    private static final int MAX_VERSIONS_PER_MSG = 15;
-    private static final ConcurrentHashMap<String, List<EditEntry>> cache = new ConcurrentHashMap<>();
-    private static SharedPreferences prefs;
-    private static volatile boolean loaded = false;
-
-    public static synchronized void init(Context context) {
-        if (loaded || context == null) {
+    public static void init(Context context) {
+        if (prefs != null) {
             return;
         }
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        Map<String, ?> all = prefs.getAll();
-        if (all != null) {
-            for (Map.Entry<String, ?> entry : all.entrySet()) {
-                Object val = entry.getValue();
-                if (val instanceof String) {
-                    List<EditEntry> list = parseJson((String) val);
-                    if (!list.isEmpty()) {
-                        cache.put(entry.getKey(), list);
+        try {
+            Map<String, ?> all = prefs.getAll();
+            if (all != null) {
+                for (Map.Entry<String, ?> e : all.entrySet()) {
+                    if (e.getValue() instanceof String) {
+                        memoryCache.put(e.getKey(), parse((String) e.getValue()));
                     }
                 }
             }
-        }
-        loaded = true;
-    }
-
-    private static void ensureInit() {
-        if (!loaded && ApplicationLoader.applicationContext != null) {
-            init(ApplicationLoader.applicationContext);
+        } catch (Exception ignore) {
         }
     }
 
-    private static String keyFor(int account, long dialogId, int msgId) {
+    private static String key(int account, long dialogId, int msgId) {
         return account + "_" + dialogId + "_" + msgId;
     }
 
-    private static List<EditEntry> parseJson(String raw) {
-        List<EditEntry> list = Collections.synchronizedList(new ArrayList<>());
+    private static ArrayList<EditEntry> parse(String json) {
+        ArrayList<EditEntry> list = new ArrayList<>();
+        if (TextUtils.isEmpty(json)) {
+            return list;
+        }
         try {
-            JSONArray arr = new JSONArray(raw);
+            JSONArray arr = new JSONArray(json);
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.optJSONObject(i);
                 if (obj != null) {
-                    int date = obj.optInt("d", 0);
-                    String text = obj.optString("t", "");
-                    if (!TextUtils.isEmpty(text)) {
-                        list.add(new EditEntry(date, text));
-                    }
+                    list.add(new EditEntry(obj.optInt("d", 0), obj.optString("t", "")));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Exception ignore) {
         }
         return list;
     }
 
-    private static String toJson(List<EditEntry> list) {
+    private static String serialize(ArrayList<EditEntry> list) {
         JSONArray arr = new JSONArray();
-        synchronized (list) {
+        try {
             for (int i = 0; i < list.size(); i++) {
                 EditEntry e = list.get(i);
-                try {
-                    JSONObject obj = new JSONObject();
-                    obj.put("d", e.date);
-                    obj.put("t", e.text);
-                    arr.put(obj);
-                } catch (Throwable ignored) {
-                }
+                JSONObject obj = new JSONObject();
+                obj.put("d", e.editDate);
+                obj.put("t", e.text);
+                arr.put(obj);
             }
+        } catch (Exception ignore) {
         }
         return arr.toString();
     }
 
-    public static void recordPreviousVersion(int account, long dialogId, int msgId, int date, String previousText) {
-        if (!AeroConfig.saveEditHistory || dialogId == 0 || msgId <= 0 || TextUtils.isEmpty(previousText)) {
-            return;
+    public static synchronized boolean recordPreviousVersion(int account, long dialogId, int msgId, int editDate, String previousText) {
+        if (!AeroConfig.saveEditHistory || dialogId == 0 || msgId <= 0 || previousText == null) {
+            return false;
         }
-        ensureInit();
-        String key = keyFor(account, dialogId, msgId);
-        List<EditEntry> list = cache.get(key);
+        String trimmed = previousText.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        String k = key(account, dialogId, msgId);
+        ArrayList<EditEntry> list = memoryCache.get(k);
         if (list == null) {
-            list = Collections.synchronizedList(new ArrayList<>());
-            List<EditEntry> prev = cache.putIfAbsent(key, list);
-            if (prev != null) {
-                list = prev;
+            list = prefs != null ? parse(prefs.getString(k, "")) : new ArrayList<>();
+            memoryCache.put(k, list);
+        }
+        if (!list.isEmpty()) {
+            EditEntry last = list.get(list.size() - 1);
+            if (TextUtils.equals(last.text, previousText)) {
+                return false;
             }
         }
-        synchronized (list) {
-            if (!list.isEmpty()) {
-                EditEntry last = list.get(list.size() - 1);
-                if (TextUtils.equals(last.text, previousText)) {
-                    return;
-                }
-            }
-            list.add(new EditEntry(date, previousText));
-            while (list.size() > MAX_VERSIONS_PER_MSG) {
-                list.remove(0);
-            }
-            if (prefs != null) {
-                prefs.edit().putString(key, toJson(list)).apply();
-            }
+        list.add(new EditEntry(editDate, previousText));
+        while (list.size() > MAX_VERSIONS_PER_MSG) {
+            list.remove(0);
         }
+        if (prefs != null) {
+            prefs.edit().putString(k, serialize(list)).apply();
+        }
+        return true;
     }
 
-    public static boolean hasHistory(int account, long dialogId, int msgId) {
-        ensureInit();
-        List<EditEntry> list = cache.get(keyFor(account, dialogId, msgId));
-        return list != null && !list.isEmpty();
-    }
-
-    public static ArrayList<EditEntry> getHistory(int account, long dialogId, int msgId) {
-        ensureInit();
-        List<EditEntry> list = cache.get(keyFor(account, dialogId, msgId));
-        if (list == null) {
+    public static synchronized ArrayList<EditEntry> getHistory(int account, long dialogId, int msgId) {
+        if (dialogId == 0 || msgId <= 0) {
             return new ArrayList<>();
         }
-        synchronized (list) {
-            return new ArrayList<>(list);
+        String k = key(account, dialogId, msgId);
+        ArrayList<EditEntry> list = memoryCache.get(k);
+        if (list == null && prefs != null) {
+            list = parse(prefs.getString(k, ""));
+            memoryCache.put(k, list);
         }
+        return list != null ? new ArrayList<>(list) : new ArrayList<>();
     }
 
-    public static int getTotalCount() {
-        ensureInit();
-        int total = 0;
-        for (List<EditEntry> list : cache.values()) {
-            total += list.size();
+    public static synchronized boolean hasHistory(int account, long dialogId, int msgId) {
+        if (dialogId == 0 || msgId <= 0) {
+            return false;
         }
-        return total;
+        String k = key(account, dialogId, msgId);
+        ArrayList<EditEntry> list = memoryCache.get(k);
+        if (list != null) {
+            return !list.isEmpty();
+        }
+        return prefs != null && prefs.contains(k) && !parse(prefs.getString(k, "")).isEmpty();
     }
 
-    public static void clearAll() {
-        ensureInit();
-        cache.clear();
+    public static synchronized int getTotalCount() {
+        int count = 0;
+        for (ArrayList<EditEntry> list : memoryCache.values()) {
+            if (list != null) {
+                count += list.size();
+            }
+        }
+        return count;
+    }
+
+    public static synchronized void clearAll() {
+        memoryCache.clear();
         if (prefs != null) {
             prefs.edit().clear().apply();
         }

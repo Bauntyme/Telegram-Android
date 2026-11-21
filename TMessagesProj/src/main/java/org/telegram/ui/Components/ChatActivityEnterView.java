@@ -7358,6 +7358,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         isRecordingStateChanged();
     }
 
+    private boolean aeroBypassOutgoingTranslate = false;
+
     public boolean sendMessage() {
         if (richDraftActive && !UserConfig.getInstance(currentAccount).isPremium()) {
             RichEditor.openConversionSheet(getContext(), this::openRichEditorWithoutFormatting, () -> {
@@ -7501,6 +7503,21 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
             }
             if (checkPremiumAnimatedEmoji(currentAccount, dialog_id, parentFragment, null, message)) {
+                return;
+            }
+            if (!aeroBypassOutgoingTranslate && (org.telegram.messenger.AeroConfig.autoTranslateOutgoing || org.telegram.messenger.AeroConfig.askBeforeTranslateSend) && !TextUtils.isEmpty(message) && !message.toString().trim().startsWith("/")) {
+                final String originalMsg = message.toString();
+                org.telegram.ui.AeroUiHelper.translateOutgoingIfNeeded(currentAccount, parentActivity, originalMsg, translated -> {
+                    if (messageEditText != null && !TextUtils.equals(translated, originalMsg)) {
+                        messageEditText.setText(translated);
+                    }
+                    aeroBypassOutgoingTranslate = true;
+                    try {
+                        sendMessageInternal(notify, scheduleDate, scheduleRepeatPeriod, payStars, allowConfirm);
+                    } finally {
+                        aeroBypassOutgoingTranslate = false;
+                    }
+                });
                 return;
             }
             if (processSendingText(message, notify, scheduleDate, scheduleRepeatPeriod, payStars)) {

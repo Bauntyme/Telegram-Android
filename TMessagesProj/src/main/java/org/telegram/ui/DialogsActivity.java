@@ -7986,6 +7986,22 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
         } else {
+            if (AeroConfig.isDialogLocked(dialogId) && getParentActivity() != null) {
+                final long lockedDid = dialogId;
+                AeroUiHelper.promptPinDialog(getParentActivity(), AeroConfig.tr("Qulflangan chat", "Қулфланган чат"), () -> {
+                    AeroConfig.unlockDialogForSession(lockedDid);
+                    Bundle unlockedArgs = new Bundle();
+                    if (DialogObject.isEncryptedDialog(lockedDid)) {
+                        unlockedArgs.putInt("enc_id", DialogObject.getEncryptedChatId(lockedDid));
+                    } else if (DialogObject.isUserDialog(lockedDid)) {
+                        unlockedArgs.putLong("user_id", lockedDid);
+                    } else {
+                        unlockedArgs.putLong("chat_id", -lockedDid);
+                    }
+                    presentFragment(new ChatActivity(unlockedArgs));
+                });
+                return;
+            }
             Bundle args = new Bundle();
             if (DialogObject.isEncryptedDialog(dialogId)) {
                 args.putInt("enc_id", DialogObject.getEncryptedChatId(dialogId));
@@ -10709,7 +10725,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
         } else if (id == NotificationCenter.messagesDeleted) {
-            if (searchIsShowed && searchViewPager != null) {
+            if (!AeroConfig.saveDeletedMessages && searchIsShowed && searchViewPager != null) {
                 ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>) args[0];
                 long channelId = (Long) args[1];
                 searchViewPager.messagesDeleted(channelId, markAsDeletedMessages);
@@ -10949,7 +10965,18 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {
-            return messagesController.getDialogs(folderId);
+            ArrayList<TLRPC.Dialog> raw = messagesController.getDialogs(folderId);
+            if (!AeroConfig.hiddenDialogIds.isEmpty() && !AeroConfig.hiddenChatsUnlocked && raw != null) {
+                ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(raw.size());
+                for (int i = 0; i < raw.size(); i++) {
+                    TLRPC.Dialog d = raw.get(i);
+                    if (d != null && !AeroConfig.isDialogHidden(d.id)) {
+                        filtered.add(d);
+                    }
+                }
+                return filtered;
+            }
+            return raw;
         } else if (dialogsType == DIALOGS_TYPE_WIDGET || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY) {
             return messagesController.dialogsServerOnly;
         } else if (dialogsType == DIALOGS_TYPE_ADD_USERS_TO) {

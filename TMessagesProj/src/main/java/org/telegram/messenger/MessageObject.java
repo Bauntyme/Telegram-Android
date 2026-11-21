@@ -41,6 +41,7 @@ import android.text.TextUtils;
 import android.text.style.CharacterStyle;
 import android.text.style.ClickableSpan;
 import android.text.style.RelativeSizeSpan;
+import android.text.style.StyleSpan;
 import android.text.style.URLSpan;
 import android.text.util.Linkify;
 import android.util.Base64;
@@ -228,7 +229,9 @@ public class MessageObject {
     public int dateKeyInt;
     public String monthKey;
     public boolean deleted;
+    public boolean aeroDeleted;
     public boolean deletedByThanos;
+    private boolean aeroEditHistoryApplied;
     public float audioProgress;
     public float forceSeekTo = -1;
     public int audioProgressMs;
@@ -3958,6 +3961,7 @@ public class MessageObject {
             fromUser = MessagesController.getInstance(currentAccount).getUser(messageOwner.from_id.user_id);
         }
         messageText = text;
+        aeroEditHistoryApplied = false;
         final ArrayList<TLRPC.MessageEntity> entities = getEntities();
         final TextPaint paint;
         if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaGame) {
@@ -4801,10 +4805,15 @@ public class MessageObject {
     }
 
     public void updateMessageText() {
+        aeroEditHistoryApplied = false;
         updateMessageText(MessagesController.getInstance(currentAccount).getUsers(), MessagesController.getInstance(currentAccount).getChats(), null, null);
     }
 
     private void updateMessageText(AbstractMap<Long, TLRPC.User> users, AbstractMap<Long, TLRPC.Chat> chats, LongSparseArray<TLRPC.User> sUsers, LongSparseArray<TLRPC.Chat> sChats) {
+        aeroEditHistoryApplied = false;
+        if (AeroConfig.saveDeletedMessages && messageOwner != null && AeroDeletedStore.isDeleted(currentAccount, getDialogId(), getId())) {
+            aeroDeleted = true;
+        }
         TLRPC.User fromUser = null;
         TLRPC.Chat fromChat = null;
         if (messageOwner.from_id instanceof TLRPC.TL_peerUser) {
@@ -7058,6 +7067,10 @@ public class MessageObject {
             }
         }
         if (!layoutCreated) {
+            if (aeroEditHistoryApplied) {
+                aeroEditHistoryApplied = false;
+                updateMessageText();
+            }
             layoutCreated = true;
             TLRPC.User fromUser = null;
             if (isFromUser()) {
@@ -7089,7 +7102,83 @@ public class MessageObject {
     }
 
     public void resetLayout() {
+        if (aeroEditHistoryApplied) {
+            aeroEditHistoryApplied = false;
+            updateMessageText();
+        }
         layoutCreated = false;
+    }
+
+    public boolean isAeroDeleted() {
+        if (!AeroConfig.saveDeletedMessages) {
+            return false;
+        }
+        if (aeroDeleted || deleted) {
+            return true;
+        }
+        if (messageOwner != null && AeroDeletedStore.isDeleted(currentAccount, getDialogId(), getId())) {
+            aeroDeleted = true;
+            return true;
+        }
+        return false;
+    }
+
+    private CharSequence prependAeroEditHistory(CharSequence formattedCurrent, TextPaint paint) {
+        if (!AeroConfig.saveEditHistory || messageOwner == null || getId() <= 0 || isOut() && isSending()) {
+            return formattedCurrent;
+        }
+        ArrayList<AeroEditHistoryStore.EditEntry> history = AeroEditHistoryStore.getHistory(currentAccount, getDialogId(), getId());
+        if (history.isEmpty()) {
+            return formattedCurrent;
+        }
+        SpannableStringBuilder sb = new SpannableStringBuilder();
+        for (int i = 0; i < history.size(); i++) {
+            AeroEditHistoryStore.EditEntry entry = history.get(i);
+            String label = history.size() == 1
+                ? AeroConfig.tr("📝 Eski:\n", "📝 Эски:\n")
+                : AeroConfig.tr("📝 Eski #" + (i + 1) + ":\n", "📝 Эски #" + (i + 1) + ":\n");
+            int lStart = sb.length();
+            sb.append(label);
+            sb.setSpan(new StyleSpan(Typeface.BOLD), lStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.setSpan(new RelativeSizeSpan(0.84f), lStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+            String oldBody = TextUtils.isEmpty(entry.text) ? "" : entry.text;
+            CharSequence oldFormatted = oldBody;
+            if (paint != null && !TextUtils.isEmpty(oldBody)) {
+                try {
+                    oldFormatted = Emoji.replaceEmoji(oldBody, paint.getFontMetricsInt(), false);
+                } catch (Exception ignore) {
+                }
+            }
+            int bStart = sb.length();
+            sb.append(oldFormatted);
+            sb.setSpan(new StyleSpan(Typeface.ITALIC), bStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.setSpan(new RelativeSizeSpan(0.92f), bStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.append("\n\n");
+        }
+        String newLabel = AeroConfig.tr("✨ Yangi:\n", "✨ Янги:\n");
+        int nStart = sb.length();
+        sb.append(newLabel);
+        sb.setSpan(new StyleSpan(Typeface.BOLD), nStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new RelativeSizeSpan(0.84f), nStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        if (formattedCurrent != null) {
+            sb.append(formattedCurrent);
+        }
+        return sb;
+    }
+
+    public void refreshAeroEditHistoryDisplay() {
+        if (messageOwner == null) {
+            return;
+        }
+        aeroEditHistoryApplied = false;
+        caption = null;
+        updateMessageText();
+        generateCaption();
+        layoutCreated = false;
+        emojiOnlyCount = 0;
+        setType();
+        checkLayout();
     }
 
     public String getMimeType() {
@@ -7940,6 +8029,9 @@ public class MessageObject {
             applyTimestampsHighlightForReplyMsg(caption);
             if (captionLinksHidden) {
                 removeLinks(caption);
+            }
+            if (AeroConfig.saveEditHistory && getId() > 0 && AeroEditHistoryStore.hasHistory(currentAccount, getDialogId(), getId())) {
+                caption = prependAeroEditHistory(caption, Theme.chat_msgTextPaint);
             }
         }
     }
@@ -9028,6 +9120,15 @@ public class MessageObject {
             paint = Theme.chat_msgGameTextPaint;
         } else {
             paint = Theme.chat_msgTextPaint;
+        }
+
+        if (!aeroEditHistoryApplied && AeroConfig.saveEditHistory && getId() > 0 && AeroEditHistoryStore.hasHistory(currentAccount, getDialogId(), getId())) {
+            messageText = prependAeroEditHistory(messageText, paint);
+            aeroEditHistoryApplied = true;
+            emojiOnlyCount = 0;
+            if (type == TYPE_EMOJIS) {
+                type = TYPE_TEXT;
+            }
         }
 
         CharSequence text = messageText;

@@ -1260,6 +1260,33 @@ public class FilterTabsView extends FrameLayout {
         return title;
     }
 
+    private static String applyAeroFolderStyle(String rawText, boolean isDefault) {
+        if (org.telegram.messenger.AeroConfig.folderStyle == org.telegram.messenger.AeroConfig.FOLDER_STYLE_TEXT || TextUtils.isEmpty(rawText)) {
+            return rawText;
+        }
+        String icon = "📁";
+        String low = rawText.toLowerCase(java.util.Locale.US);
+        if (isDefault || low.contains("all") || low.contains("barcha") || low.contains("все")) {
+            icon = "💬";
+        } else if (low.contains("unread") || low.contains("o‘qil") || low.contains("непрочит")) {
+            icon = "🔵";
+        } else if (low.contains("bot") || low.contains("бот")) {
+            icon = "🤖";
+        } else if (low.contains("chan") || low.contains("kan") || low.contains("канал")) {
+            icon = "📢";
+        } else if (low.contains("group") || low.contains("guruh") || low.contains("груп")) {
+            icon = "👥";
+        } else if (low.contains("priv") || low.contains("shax") || low.contains("лич")) {
+            icon = "👤";
+        } else if (low.contains("admin") || low.contains("админ")) {
+            icon = "🛡️";
+        }
+        if (org.telegram.messenger.AeroConfig.folderStyle == org.telegram.messenger.AeroConfig.FOLDER_STYLE_ICON) {
+            return icon;
+        }
+        return icon + " " + rawText;
+    }
+
     public void addTab(int id, int stableId, String text, ArrayList<TLRPC.MessageEntity> entities, boolean noanimate, boolean isDefault, boolean isLocked) {
         int position = tabs.size();
         if (position == 0 && selectedTabId == -1) {
@@ -1272,7 +1299,8 @@ public class FilterTabsView extends FrameLayout {
             currentPosition = position;
         }
 
-        Tab tab = new Tab(id, text(text, entities), noanimate);
+        String displayText = applyAeroFolderStyle(text, isDefault);
+        Tab tab = new Tab(id, text(displayText, displayText.equals(text) ? entities : null), noanimate);
         tab.isDefault = isDefault;
         tab.isLocked = isLocked;
         allTabsWidth += tab.getWidth(true) + dp(TAB_PADDING_WIDTH);

@@ -2009,7 +2009,34 @@ public class ChatActivity extends BaseFragment implements
             } else {
                 return;
             }
-            if (messageObject.isSecret() || !messageObject.canSetReaction() || messageObject.isExpiredStory() || messageObject.type == MessageObject.TYPE_JOINED_CHANNEL) {
+            if (messageObject.isSecret() || messageObject.isExpiredStory() || messageObject.type == MessageObject.TYPE_JOINED_CHANNEL) {
+                return;
+            }
+            if (AeroConfig.doubleTapAction == AeroConfig.DOUBLE_TAP_NONE) {
+                return;
+            }
+            if (AeroConfig.doubleTapAction == AeroConfig.DOUBLE_TAP_REPLY) {
+                showFieldPanelForReply(messageObject);
+                return;
+            }
+            if (AeroConfig.doubleTapAction == AeroConfig.DOUBLE_TAP_COPY) {
+                CharSequence cap = getMessageCaption(messageObject, null);
+                CharSequence txt = cap != null ? cap : getMessageContent(messageObject, 0, false);
+                if (!TextUtils.isEmpty(txt)) {
+                    AndroidUtilities.addToClipboard(txt);
+                    createUndoView();
+                    if (undoView != null) {
+                        undoView.showWithAction(0, UndoView.ACTION_MESSAGE_COPIED, null);
+                    }
+                }
+                return;
+            }
+            if (AeroConfig.doubleTapAction == AeroConfig.DOUBLE_TAP_TRANSLATE) {
+                selectedObject = messageObject;
+                processSelectedOption(OPTION_TRANSLATE);
+                return;
+            }
+            if (!messageObject.canSetReaction()) {
                 return;
             }
             if (!(currentChat == null || ChatObject.isChannelAndNotMegaGroup(currentChat) || ChatObject.canUserDoAction(currentChat, ChatObject.ACTION_SEND_REACTIONS))) {
@@ -21621,6 +21648,35 @@ public class ChatActivity extends BaseFragment implements
                     needSelectFromMessageId = needSelect;
                 }
             }
+            if (!isCache && AeroConfig.saveDeletedMessages && oldMessagesDict != null && !messArr.isEmpty()) {
+                int minLoaded = Integer.MAX_VALUE;
+                int maxLoaded = Integer.MIN_VALUE;
+                HashSet<Integer> loadedIds = new HashSet<>(messArr.size());
+                for (int k = 0; k < messArr.size(); k++) {
+                    int mid = messArr.get(k).getId();
+                    loadedIds.add(mid);
+                    if (mid > 0) {
+                        minLoaded = Math.min(minLoaded, mid);
+                        maxLoaded = Math.max(maxLoaded, mid);
+                    }
+                }
+                if (minLoaded != Integer.MAX_VALUE) {
+                    ArrayList<MessageObject> extra = null;
+                    for (int k = 0; k < oldMessagesDict.size(); k++) {
+                        MessageObject prev = oldMessagesDict.valueAt(k);
+                        if (prev != null && prev.getId() >= minLoaded && prev.isAeroDeleted() && !loadedIds.contains(prev.getId())) {
+                            if (extra == null) {
+                                extra = new ArrayList<>(messArr);
+                            }
+                            extra.add(prev);
+                        }
+                    }
+                    if (extra != null) {
+                        Collections.sort(extra, (a, b) -> Integer.compare(b.getId(), a.getId()));
+                        messArr = extra;
+                    }
+                }
+            }
         }
 
         if (chatListItemAnimator != null) {
@@ -27168,17 +27224,39 @@ public class ChatActivity extends BaseFragment implements
         }
         if (!sent && AeroConfig.saveDeletedMessages) {
             boolean refreshedAny = false;
+            HashSet<Integer> aeroIds = new HashSet<>(markAsDeletedMessages.size());
             for (int a = 0, count = markAsDeletedMessages.size(); a < count; a++) {
                 Integer mid = markAsDeletedMessages.get(a);
                 if (mid == null) continue;
+                aeroIds.add(mid);
                 MessageObject obj = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
                     ? filteredMessagesDict.get(mid)
                     : messagesDict[loadIndex].get(mid);
                 if (obj != null) {
-                    obj.deleted = true;
+                    obj.deleted = false;
+                    obj.aeroDeleted = true;
                     obj.resetLayout();
                     AeroDeletedStore.markDeleted(currentAccount, obj.getDialogId(), obj.getId());
                     refreshedAny = true;
+                }
+            }
+            if (chatListView != null && !aeroIds.isEmpty()) {
+                for (int c = 0, n = chatListView.getChildCount(); c < n; c++) {
+                    View child = chatListView.getChildAt(c);
+                    if (child instanceof ChatMessageCell) {
+                        ChatMessageCell cell = (ChatMessageCell) child;
+                        MessageObject mObj = cell.getMessageObject();
+                        if (mObj != null && aeroIds.contains(mObj.getId())) {
+                            mObj.deleted = false;
+                            mObj.aeroDeleted = true;
+                            mObj.resetLayout();
+                            AeroDeletedStore.markDeleted(currentAccount, mObj.getDialogId(), mObj.getId());
+                            cell.setMessageObject(mObj, cell.getCurrentMessagesGroup(), cell.isPinnedBottom(), cell.isPinnedTop(), cell.isFirstInChat(), cell.isLastInChatList());
+                            cell.requestLayout();
+                            cell.invalidate();
+                            refreshedAny = true;
+                        }
+                    }
                 }
             }
             if (refreshedAny) {
@@ -46688,7 +46766,7 @@ public class ChatActivity extends BaseFragment implements
                     icons.add(R.drawable.msg_edit);
                 }
                 if (AeroConfig.saveEditHistory && selectedObject != null && selectedObject.getId() > 0 && org.telegram.messenger.AeroEditHistoryStore.hasHistory(currentAccount, selectedObject.getDialogId(), selectedObject.getId())) {
-                    items.add("Tahrirlar tarixi");
+                    items.add(AeroConfig.tr("Tahrirlar tarixi", "Таҳрирлар тарихи"));
                     options.add(OPTION_EDIT_HISTORY);
                     icons.add(R.drawable.msg_recent);
                 }
