@@ -1298,7 +1298,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_VIEW_STATISTICS = 115;
     public final static int OPTION_WELCOME_REVERT = 116;
     public final static int OPTION_SEND_MONEY = 117;
-    public final static int OPTION_EDIT_HISTORY = 118;
+    public final static int OPTION_EDIT_HISTORY = 119;
     public final static int OPTION_STOP_LIVE_LOCATION = 118;
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
