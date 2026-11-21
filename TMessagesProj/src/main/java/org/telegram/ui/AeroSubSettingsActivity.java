@@ -172,9 +172,10 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             } catch (Exception ignore) {
             }
             final int finalDownloads = Math.max(totalDownloads, 1);
+            final boolean hasDownloads = totalDownloads > 0;
             AndroidUtilities.runOnUIThread(() -> {
                 fetchingStats = false;
-                if (totalDownloads > 0 || AeroConfig.cachedCommunityUsers == 0) {
+                if (hasDownloads || AeroConfig.cachedCommunityUsers == 0) {
                     AeroConfig.cachedCommunityUsers = finalDownloads;
                     AeroConfig.cachedCommunityFetchMs = System.currentTimeMillis();
                     AeroConfig.saveInt("cachedCommunityUsers", finalDownloads);
