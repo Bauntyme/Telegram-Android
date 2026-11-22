@@ -798,13 +798,18 @@ public class TranscribeButton {
             AndroidUtilities.runOnUIThread(() -> {
                 NotificationCenter.getInstance(finalMessageObject.currentAccount).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, finalMessageObject, (Long) transcription_id, (String) text, (Boolean) true, (Boolean) true);
             });
-            if (org.telegram.messenger.AeroConfig.autoTranslateVoice && !TextUtils.isEmpty(text)) {
+            final boolean hasExplicitSttLang = !"auto".equalsIgnoreCase(org.telegram.messenger.AeroConfig.voiceToTextLang)
+                    && !TextUtils.isEmpty(org.telegram.messenger.AeroConfig.voiceToTextLang);
+            if ((org.telegram.messenger.AeroConfig.autoTranslateVoice || hasExplicitSttLang) && !TextUtils.isEmpty(text)) {
                 final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
                 req.flags |= 2;
                 final TLRPC.TL_textWithEntities t = new TLRPC.TL_textWithEntities();
                 t.text = text;
                 req.text.add(t);
-                req.to_lang = org.telegram.messenger.TranslateController.normalizeLanguage(org.telegram.messenger.AeroConfig.translateTargetLang);
+                String targetLang = hasExplicitSttLang
+                        ? org.telegram.messenger.AeroConfig.voiceToTextLang
+                        : org.telegram.messenger.AeroConfig.translateTargetLang;
+                req.to_lang = org.telegram.messenger.TranslateController.normalizeLanguage(targetLang);
                 final int acc = finalMessageObject.currentAccount;
                 ConnectionsManager.getInstance(acc).sendRequest(req, (res, err) -> {
                     if (res instanceof TLRPC.TL_messages_translateResult) {

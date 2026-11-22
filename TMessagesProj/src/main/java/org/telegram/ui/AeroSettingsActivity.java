@@ -15,6 +15,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
@@ -35,6 +36,7 @@ public class AeroSettingsActivity extends UniversalFragment {
 
     // Header & Accounts
     private static final int ID_ABOUT = 2;
+    private static final int ID_GUIDE = 4;
     private static final int ID_ACCOUNTS = 3;
 
     // 1. Privacy & Ghost Mode
@@ -46,6 +48,7 @@ public class AeroSettingsActivity extends UniversalFragment {
     private static final int ID_GHOST_STORY = 15;
     private static final int ID_SAVE_DELETED = 16;
     private static final int ID_EDIT_HISTORY = 17;
+    private static final int ID_SAVE_ONCE_MEDIA = 24;
     private static final int ID_SCREENSHOT_PROTECT = 18;
     private static final int ID_BLOCK_FOREIGN = 19;
     private static final int ID_CHAT_LOCK_ENABLE = 20;
@@ -225,8 +228,12 @@ public class AeroSettingsActivity extends UniversalFragment {
 
         addNavIfMatches(items, ID_ABOUT, 0xFF0284C7, R.drawable.msg_info,
             "AeroGram haqida", "AeroGram ҳақида",
-            "Har bir funksiyani yoqish, ishlatish va o‘chirish qo‘llanmasi", "Ҳар бир функцияни ёқиш, ишлатиш ва ўчириш қўлланмаси",
-            "", AeroRowCell.BADGE_NONE);
+            "Ilova versiyasi (v1.4.0), statistika va rasmiy havolalar", "Илова версияси (v1.4.0), статистика ва расмий ҳаволалар",
+            "v1.4.0", AeroRowCell.BADGE_NONE);
+        addNavIfMatches(items, ID_GUIDE, 0xFF0EA5E9, R.drawable.msg_help,
+            "AeroGram Qo‘llanmasi", "AeroGram Қўлланмаси",
+            "Barcha funksiyalarni yoqish, ishlatish va o‘chirish yo‘riqnomasi", "Барча функцияларни ёқиш, ишлатиш ва ўчириш йўриқномаси",
+            AeroConfig.tr("To‘liq", "Тўлиқ"), AeroRowCell.BADGE_NEW);
 
         items.add(UItem.asShadow(null));
 
@@ -278,6 +285,11 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Tahrirlar tarixini saqlash", "Таҳрирлар тарихини сақлаш",
             "Avval Eski matn, pastida Yangi matn va barcha tahrir versiyalari", "Аввал Эски матн, пастида Янги матн ва барча таҳрир версиялари",
             AeroConfig.saveEditHistory, AeroRowCell.BADGE_NEW);
+        addSwitchIfMatches(items, ID_SAVE_ONCE_MEDIA, 0xFF0EA5E9, R.drawable.msg_saved,
+            "1-martalik rasm, video va goloslarni saqlash", "1-марталик расм, видео ва голосларни сақлаш",
+            "1-martalik media xabarga «??» deb reply qiling yoki menyudan Saved Messages ga saqlang",
+            "1-марталик медиа хабарга «??» деб reply қилинг ёки менюдан Saved Messages га сақланг",
+            AeroConfig.saveOnceMedia, AeroRowCell.BADGE_NEW);
         addSwitchIfMatches(items, ID_SCREENSHOT_PROTECT, 0xFFDC2626, R.drawable.passcode_check,
             "Skreenshot va ekran yozishdan himoya", "Скриншот ва экран ёзишдан ҳимоя",
             "Ekran tasvirga olishni bloklaydi", "Экран тасвирга олишни блоклайди",
@@ -418,7 +430,7 @@ public class AeroSettingsActivity extends UniversalFragment {
         addNavIfMatches(items, ID_AERO_PROXY, 0xFF0EA5E9, R.drawable.proxy_check,
             "AeroGramProxy", "AeroGramProxy",
             "Tezkor proksi serverlarni boshqarish va yoqish", "Тезкор прокси серверларни бошқариш ва ёқиш",
-            AeroConfig.aeroProxyEnabled ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("Sozlash", "Созлаш"), AeroRowCell.BADGE_AERO);
+            SharedConfig.isProxyEnabled() ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("Sozlash", "Созлаш"), AeroRowCell.BADGE_AERO);
         addSwitchIfMatches(items, ID_REMINDER_ENABLE, 0xFFF59E0B, R.drawable.msg_notifications,
             "O‘qilmagan xabar eslatmasi", "Ўқилмаган хабар эслатмаси",
             "Javob berilmagan xabarlarni eslatib turadi", "Жавоб берилмаган хабарларни эслатиб туради",
@@ -436,13 +448,13 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Chat papkalari ko‘rinishini tanlang", "Чат папкалари кўринишини танланг",
             folderStyleLabel(AeroConfig.folderStyle), AeroRowCell.BADGE_NEW);
         addNavIfMatches(items, ID_ADMIN_FOLDERS, 0xFF2563EB, R.drawable.msg_folders_groups,
-            "Admin papkalari", "Админ папкалари",
-            "Boshqaruv va admin papkalarini sozlash", "Бошқарув ва админ папкаларини созлаш",
-            AeroConfig.adminFoldersEnabled ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("Sozlash", "Созлаш"), AeroRowCell.BADGE_NONE);
-        addNavIfMatches(items, ID_RECOMMENDED_FOLDERS, 0xFF1D4ED8, R.drawable.msg_folders_channels,
+            "Papkalar va Admin boshqaruvi", "Папкалар ва Админ бошқаруви",
+            "Chat papkalari va boshqaruv bo‘limini ochish", "Чат папкалари ва бошқарув бўлимини очиш",
+            AeroConfig.tr("Ochish", "Очиш"), AeroRowCell.BADGE_NONE);
+        addSwitchIfMatches(items, ID_RECOMMENDED_FOLDERS, 0xFF1D4ED8, R.drawable.msg_folders_channels,
             "Tavsiya etilgan papkalar", "Тавсия этилган папкалар",
-            "Shaxsiy, Guruhlar, Kanallar va Botlar papkalari", "Шахсий, Гуруҳлар, Каналлар ва Ботлар папкалари",
-            "", AeroRowCell.BADGE_NONE);
+            "Papkalar bo‘limida Shaxsiy, Guruhlar, Kanallar tavsiyasini ko‘rsatadi", "Папкалар бўлимида Шахсий, Гуруҳлар, Каналлар тавсиясини кўрсатади",
+            AeroConfig.recommendedFoldersEnabled, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_HIDE_FOLDERS, 0xFF4338CA, R.drawable.msg_folders,
             "Chatlar ro‘yxatida papkalarni yashirish", "Чатлар рўйхатида папкаларни яшириш",
             "Yuqori papka qatorini ko‘rinmas qiladi", "Юқори папка қаторини кўринмас қилади",
@@ -529,8 +541,8 @@ public class AeroSettingsActivity extends UniversalFragment {
             "", AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.3.1 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
-            "AeroGram v1.3.1 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
+            "AeroGram v1.4.0 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
+            "AeroGram v1.4.0 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
         )));
     }
 
@@ -577,6 +589,9 @@ public class AeroSettingsActivity extends UniversalFragment {
             case ID_ABOUT:
                 presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_ABOUT));
                 break;
+            case ID_GUIDE:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_GUIDE));
+                break;
             case ID_ACCOUNTS:
                 presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_ACCOUNTS));
                 break;
@@ -620,6 +635,11 @@ public class AeroSettingsActivity extends UniversalFragment {
             case ID_EDIT_HISTORY:
                 AeroConfig.saveEditHistory = !AeroConfig.saveEditHistory;
                 AeroConfig.saveBool("saveEditHistory", AeroConfig.saveEditHistory);
+                reloadList();
+                break;
+            case ID_SAVE_ONCE_MEDIA:
+                AeroConfig.saveOnceMedia = !AeroConfig.saveOnceMedia;
+                AeroConfig.saveBool("saveOnceMedia", AeroConfig.saveOnceMedia);
                 reloadList();
                 break;
             case ID_SCREENSHOT_PROTECT:
@@ -771,12 +791,14 @@ public class AeroSettingsActivity extends UniversalFragment {
                 presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_FOLDER_STYLE));
                 break;
             case ID_ADMIN_FOLDERS:
-                AeroConfig.adminFoldersEnabled = !AeroConfig.adminFoldersEnabled;
-                AeroConfig.saveBool("adminFoldersEnabled", AeroConfig.adminFoldersEnabled);
+                AeroConfig.adminFoldersEnabled = true;
+                AeroConfig.saveBool("adminFoldersEnabled", true);
                 presentFragment(new FiltersSetupActivity());
                 break;
             case ID_RECOMMENDED_FOLDERS:
-                presentFragment(new FiltersSetupActivity());
+                AeroConfig.recommendedFoldersEnabled = !AeroConfig.recommendedFoldersEnabled;
+                AeroConfig.saveBool("recommendedFoldersEnabled", AeroConfig.recommendedFoldersEnabled);
+                reloadList();
                 break;
             case ID_HIDE_FOLDERS:
                 AeroConfig.hideFolders = !AeroConfig.hideFolders;
@@ -813,6 +835,7 @@ public class AeroSettingsActivity extends UniversalFragment {
             case ID_LIGHT_BRAND_ACCENT:
                 AeroConfig.lightThemeBrandAccent = !AeroConfig.lightThemeBrandAccent;
                 AeroConfig.saveBool("lightThemeBrandAccent", AeroConfig.lightThemeBrandAccent);
+                AeroUiHelper.notifyLightBrandAccentChanged();
                 reloadList();
                 break;
             case ID_RECORD_CALLS:

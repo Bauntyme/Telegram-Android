@@ -26,6 +26,8 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.AeroConfig;
+import org.telegram.messenger.AeroDeletedStore;
+import org.telegram.messenger.AeroEditHistoryStore;
 import org.telegram.messenger.AeroTextUtils;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DialogObject;
@@ -35,6 +37,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
@@ -71,6 +74,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     public static final int MODE_NEW_ALPHABET = 12;
     public static final int MODE_POSTFIX = 13;
     public static final int MODE_AUTO_TRANSLATE = 14;
+    public static final int MODE_GUIDE = 15;
 
     private static final int MENU_REFRESH = 1;
 
@@ -84,6 +88,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     private View statsAccountsCardView;
     private TextView statsAccountsValueView;
     private View aboutIntroView;
+    private View guideIntroView;
     private View alphabetPreviewView;
     private View postfixEditorView;
     private EditText postfixEditText;
@@ -142,6 +147,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             case MODE_NEW_ALPHABET: return AeroConfig.tr("Yangi o‘zbek alifbosi", "Янги ўзбек алифбоси");
             case MODE_POSTFIX: return AeroConfig.tr("Avto-postfiks", "Авто-постфикс");
             case MODE_AUTO_TRANSLATE: return AeroConfig.tr("Avto-tarjima", "Авто-таржима");
+            case MODE_GUIDE: return AeroConfig.tr("AeroGram Qo‘llanmasi", "AeroGram Қўлланмаси");
             default: return AeroConfig.tr("AeroGram haqida", "AeroGram ҳақида");
         }
     }
@@ -154,6 +160,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         statsAccountsCardView = null;
         statsAccountsValueView = null;
         aboutIntroView = null;
+        guideIntroView = null;
         alphabetPreviewView = null;
         postfixEditorView = null;
         postfixEditText = null;
@@ -363,6 +370,8 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         if (mode == MODE_ABOUT) {
             fillAboutItems(items);
+        } else if (mode == MODE_GUIDE) {
+            fillGuideItems(items);
         } else if (mode == MODE_STATS) {
             fillStatsItems(items);
         } else if (mode == MODE_BOTS) {
@@ -810,78 +819,99 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     }
 
     private static final GuideEntry[] GUIDE_CARDS = {
+        new GuideEntry(0xFF0EA5E9, R.drawable.msg_saved,
+            "1-martalik Rasm, Video, Golos & Dumaloq video saqlash (?? reply)",
+            "1-марталик Расм, Видео, Голос & Думалоқ видео сақлаш (?? reply)",
+            "Standart holatda yoqilgan (Xabarlar tarixi va Himoya → 1-martalik rasm, video va goloslarni saqlash)",
+            "Стандарт ҳолатда ёқилган (Хабарлар тарихи ва Ҳимоя → 1-марталик расм, видео ва голосларни сақлаш)",
+            "Chatdagi istalgan 1-martalik rasm, video, ovozli xabar (golos) yoki dumaloq videoga Reply qilib «??» yozib yuboring — xabar chatga ketmaydi (suhbatdosh bilmaydi), fayl esa darhol Saved Messages ga doimiy nusxa bo‘lib tushadi! Shuningdek, xabarni bosib «Saved Messages ga saqlash» yoki ko‘rish oynasidagi saqlash tugmasidan foydalanishingiz mumkin.",
+            "Чатдаги исталган 1-марталик расм, видео, овозли хабар (голос) ёки думалоқ видеога Reply қилиб «??» ёзиб юборинг — хабар чатга кетмайди (суҳбатдош билмайди), файл эса дарҳол Saved Messages га доимий нусха бўлиб тушади! Шунингдек, хабарни босиб «Saved Messages га сақлаш» ёки кўриш ойнасидаги сақлаш тугмасидан фойдаланишингиз мумкин.",
+            "1-martalik media saqlash kalitini o‘chiring.", "1-марталик медиа сақлаш калитини ўчиринг."),
         new GuideEntry(0xFF6366F1, R.drawable.msg_stealth_locked,
             "Ghost rejimi (Ko‘rinmaslik)", "Ghost режими (Кўринмаслик)",
-            "Sozlamalar → Ghost rejimi", "Созламалар → Ghost режими",
-            "Xabar o‘qiganda ikki ko‘k belgi ketmaydi, onlayn va «yozmoqda...» holati yashiriladi, hikoyalar maxfiy ko‘riladi.",
-            "Хабар ўқиганда икки кўк белги кетмайди, онлайн ва «ёзмоқда...» ҳолати яширилади, ҳикоялар махфий кўрилади.",
+            "Sozlamalar → Ghost rejimi (yoki chat tepasidagi Ghost tugmasi)", "Созламалар → Ghost режими (ёки чат тепасидаги Ghost тугмаси)",
+            "Xabar o‘qiganda ikki ko‘k belgi ketmaydi, onlayn va «yozmoqda...» holati yashiriladi, hikoyalar maxfiy ko‘riladi. «Yozganda o‘qilgan qilish» yoqilsa, faqat javob yozganingizda ko‘k belgi ketadi.",
+            "Хабар ўқиганда икки кўк белги кетмайди, онлайн ва «ёзмоқда...» ҳолати яширилади, ҳикоялар махфий кўрилади. «Ёзганда ўқилган қилиш» ёқилса, фақат жавоб ёзганингизда кўк белги кетади.",
             "Ghost kalitlarini yoki chatdagi Ghost tugmasini o‘chiring.", "Ghost калитларини ёки чатдаги Ghost тугмасини ўчиринг."),
         new GuideEntry(0xFFEF4444, R.drawable.msg_delete,
-            "O‘chirilgan xabarlarni saqlash", "Ўчирилган хабарларни сақлаш",
-            "Standart holatda yoqilgan (Anti-Delete)", "Стандарт ҳолатда ёқилган (Anti-Delete)",
-            "Suhbatdosh xabarni o‘chirsa ham u chatda saqlanib qoladi va ustida «🗑 O‘chirilgan» yozuvi chiqadi. O‘zingiz o‘chirsangiz darhol o‘chadi.",
-            "Суҳбатдош хабарни ўчирса ҳам у чатда сақланиб қолади ва устида «🗑 Ўчирилган» ёзуви чиқади. Ўзингиз ўчирсангиз дарҳол ўчади.",
+            "O‘chirilgan xabarlarni saqlash (Anti-Delete)", "Ўчирилган хабарларни сақлаш (Anti-Delete)",
+            "Standart holatda yoqilgan", "Стандарт ҳолатда ёқилган",
+            "Suhbatdosh xabarni o‘chirsa ham u chatda saqlanib qoladi va ustida «🗑 O‘chirilgan» yozuvi chiqadi. O‘zingiz o‘chirgan xabar esa tasdiqdan so‘ng darhol o‘chadi.",
+            "Суҳбатдош хабарни ўчирса ҳам у чатда сақланиб қолади ва устида «🗑 Ўчирилган» ёзуви чиқади. Ўзингиз ўчирган хабар эса тасдиқдан сўнг дарҳол ўчади.",
             "AeroGram Sozlamalari → O‘chirilgan xabarlarni saqlash.", "AeroGram Созламалари → Ўчирилган хабарларни сақлаш."),
         new GuideEntry(0xFFF97316, R.drawable.msg_recent,
-            "Tahrirlar tarixi", "Таҳрирлар тарихи",
+            "Tahrirlar tarixi (Eski → Yangi)", "Таҳрирлар тарихи (Эски → Янги)",
             "Standart holatda yoqilgan", "Стандарт ҳолатда ёқилган",
-            "Xabar tahrirlanganda avvalgi matn yuqorida, yangi matn esa pastida ko‘rinadi; ustiga bosib barcha versiyalarni ko‘rish mumkin.",
-            "Хабар таҳрирланганда аввалги матн юқорида, янги матн эса пастида кўринади; устига босиб барча версияларни кўриш мумкин.",
+            "Xabar tahrirlanganda avvalgi matn yuqorida, yangi matn esa pastida ko‘rinadi; xabarni bosib «Tahrirlar tarixi» menyusi orqali barcha eski versiyalarni ko‘rish va nusxalash mumkin.",
+            "Хабар таҳрирланганда аввалги матн юқорида, янги матн эса пастида кўринади; хабарни босиб «Таҳрирлар тарихи» менюси орқали барча эски версияларни кўриш ва нусхалаш мумкин.",
             "AeroGram Sozlamalari → Tahrirlar tarixini saqlash.", "AeroGram Созламалари → Таҳрирлар тарихини сақлаш."),
         new GuideEntry(0xFF0F766E, R.drawable.msg_pin_code,
             "Yashirin va PIN-qulflangan chatlar", "Яширин ва ПИН-қулфланган чатлар",
-            "Maxfiylik → Chatni PIN bilan qulflash / Yashirin chatlar", "Махфийлик → Чатни ПИН билан қулфлаш / Яширин чатлар",
-            "Tanlangan chatlar PIN kodsiz ochilmaydi; yashirin chatlar esa umumiy ro‘yxatda umuman ko‘rinmaydi.",
-            "Танланган чатлар ПИН кодсиз очилмайди; яширин чатлар эса умумий рўйхатда умуман кўринмайди.",
+            "Himoya → AeroGram PIN kodini sozlash / Qulflangan & Yashirin chatlar", "Ҳимоя → AeroGram ПИН кодини созлаш / Қулфланган & Яширин чатлар",
+            "4 xonali PIN kod o‘rnating. Tanlangan chatlar PIN kodsiz ochilmaydi; yashirin chatlar esa umumiy ro‘yxatda umuman ko‘rinmaydi (vaqtincha ochish uchun PIN kiriting).",
+            "4 хонали ПИН код ўрнатинг. Танланган чатлар ПИН кодсиз очилмайди; яширин чатлар эса умумий рўйхатда умуман кўринмайди (вақтинча очиш учун ПИН киритинг).",
             "Chat tanlov ro‘yxatidan belgini olib tashlang.", "Чат танлов рўйхатидан белгини олиб ташланг."),
         new GuideEntry(0xFFDC2626, R.drawable.passcode_check,
-            "Skreenshot va chet el himoyasi", "Скриншот ва чет эл ҳимояси",
+            "Skreenshot va chet el raqamlari himoyasi", "Скриншот ва чет эл рақамлари ҳимояси",
             "Himoya → Skreenshot himoyasi / Chet el raqamlarini bloklash", "Ҳимоя → Скриншот ҳимояси / Чет эл рақамларини блоклаш",
-            "Ilovada ekran rasmi olishni taqiqlaydi va notanish xorijiy raqamlardan kelgan spam xabarlarni avtomatik to‘sadi.",
-            "Иловада экран расми олишни тақиқлайди ва нотаниш хорижий рақамлардан келган спам хабарларни автоматик тўсади.",
+            "Skreenshot himoyasi ekran tasvirga olishni taqiqlaydi. Chet el blokirovkasi +998 bo‘lmagan notanish xalqaro raqamlardan keladigan spamni to‘sadi.",
+            "Скриншот ҳимояси экран тасвирга олишни тақиқлайди. Чет эл блокировкаси +998 бўлмаган нотаниш халқаро рақамлардан келадиган спамни тўсади.",
             "Himoya bo‘limidagi kalitlarni o‘chiring.", "Ҳимоя бўлимидаги калитларни ўчиринг."),
         new GuideEntry(0xFF0284C7, R.drawable.msg_translate,
             "Avto-tarjima (Kiruvchi va Chiquvchi)", "Авто-таржима (Кирувчи ва Чиқувчи)",
             "Xabarlar → Avto-tarjima", "Хабарлар → Авто-таржима",
-            "Xorijiy tildagi xabarlarni o‘qishda ham, o‘z xabaringizni yuborishda ham tanlangan tilga darhol tarjima qiladi.",
-            "Хорижий тилдаги хабарларни ўқишда ҳам, ўз хабарингизни юборишда ҳам танланган тилга дарҳол таржима қилади.",
+            "Xorijiy tildagi xabarlarni chat ichida avtomatik tarjima qiladi, shuningdek yozayotgan xabaringizni yuborishdan oldin tanlangan tilga (masalan Ingliz/Rus) o‘giradi.",
+            "Хорижий тилдаги хабарларни чат ичида автоматик таржима қилади, шунингдек ёзаётган хабарингизни юборишдан олдин танланган тилга (масалан Инглиз/Рус) ўгиради.",
             "Avto-tarjima bo‘limidan o‘chiring.", "Авто-таржима бўлимидан ўчиринг."),
         new GuideEntry(0xFF2563EB, R.drawable.msg_voicechat,
-            "Ovoz → Matn (STT) & Avto-tarjima", "Овоз → Матн (STT) & Авто-таржима",
-            "Ovoz → Matn (STT)", "Овоз → Матн (STT)",
-            "Ovozli va video xabarlar ostidagi A→ belgisini bossangiz, ovozni matnga aylantiradi va xohlasangiz darhol tarjima qiladi.",
-            "Овозли ва видео хабарлар остидаги A→ белгисини боссангиз, овозни матнга айлантиради ва хоҳласангиз дарҳол таржима қилади.",
+            "Ovoz → Matn (STT) & Ovoz tarjimasi", "Овоз → Матн (STT) & Овоз таржимаси",
+            "Ovoz → Matn (STT) bo‘limi", "Овоз → Матн (STT) бўлими",
+            "Ovozli va dumaloq xabarlar ostidagi «A→» belgisini bossangiz, ovozni matnga aylantiradi; agar STT tili yoki Avto-tarjima tanlangan bo‘lsa, matn darhol tarjima bilan chiqadi.",
+            "Овозли ва думалоқ хабарлар остидаги «A→» белгисини боссангиз, овозни матнга айлантиради; агар STT тили ёки Авто-таржима танланган бўлса, матн дарҳол таржима билан чиқади.",
             "Ovoz → Matn kalitini o‘chiring.", "Овоз → Матн калитини ўчиринг."),
         new GuideEntry(0xFF7C3AED, R.drawable.msg_text_check,
-            "Yangi o‘zbek alifbosi (ş ç ō ḡ)", "Янги ўзбек алифбоси (ş ç ō ḡ)",
+            "Yangi o‘zbek alifbosi (ş ç ō ḡ) & Konverter", "Янги ўзбек алифбоси (ş ç ō ḡ) & Конвертер",
             "Xabarlar → Yangi o‘zbek alifbosi", "Хабарлар → Янги ўзбек алифбоси",
-            "Yuboriladigan yoki chatdagi xabarlarda sh→ş, ch→ç, o‘→ō, g‘→ḡ shakllarini ishlatadi; tayyor Lotin ↔ Kirill konverteriga ega.",
-            "Юбориладиган ёки чатдаги хабарларда sh→ş, ch→ç, o‘→ō, g‘→ḡ шаклларини ишлатади; тайёр Лотин ↔ Кирилл конвертерига эга.",
+            "Yuboriladigan yoki chatdagi matnlarda sh→ş, ch→ç, o‘→ō, g‘→ḡ shakllarini avtomatik qo‘llaydi hamda tayyor Lotin ↔ Kirill konverterini o‘z ichiga oladi.",
+            "Юбориладиган ёки чатдаги матнларда sh→ş, ch→ç, o‘→ō, g‘→ḡ шаклларини автоматик қўллайди ҳамда тайёр Лотин ↔ Кирилл конвертерини ўз ичига олади.",
             "Yangi o‘zbek alifbosi bo‘limidan o‘chiring.", "Янги ўзбек алифбоси бўлимидан ўчиринг."),
         new GuideEntry(0xFFA855F7, R.drawable.msg_text_outlined,
-            "Matn uslubi, Postfiks va ❤️ Effekti", "Матн услуби, Постфикс ва ❤️ Эффекти",
+            "Matn uslubi, Avto-postfiks va ❤️ Effekti", "Матн услуби, Авто-постфикс ва ❤️ Эффекти",
             "Xabarlar → Matn uslubi / Avto-postfiks / Yurakcha", "Хабарлар → Матн услуби / Авто-постфикс / Юракча",
-            "Har bir xabaringizga Qalin/Kursiv uslub, avtomatik imzo (masalan: «— AeroGram orqali») yoki ❤️ belgisini qo‘shadi.",
-            "Ҳар бир хабарингизга Қалин/Курсив услуб, автоматик имзо (масалан: «— AeroGram орқали») ёки ❤️ белгисини қўшади.",
+            "Yuboriladigan har bir matnni Qalin, Kursiv, Monoshift yoki Spoiler ko‘rinishida bezaydi, oxiriga shaxsiy imzo yoki ❤️ belgisini qo‘shadi.",
+            "Юбориладиган ҳар бир матнни Қалин, Курсив, Моношифт ёки Спойлер кўринишида безайди, охирига шахсий имзо ёки ❤️ белгисини қўшади.",
             "Matn uslubini Oddiy ga qo‘ying yoki kalitlarni o‘chiring.", "Матн услубини Оддий га қўйинг ёки калитларни ўчиринг."),
         new GuideEntry(0xFF3B82F6, R.drawable.menu_reply,
-            "Double-Tap, Forward va Tasdiqlashlar", "Double-Tap, Forward ва Тасдиқлашлар",
-            "Chat → Ikki marta bosganda / Forward / Qo‘ng‘iroq tasdiqlash", "Чат → Икки марта босганда / Forward / Қўнғироқ тасдиқлаш",
-            "Xabarni ikki marta bosish amalini (Reply, Copy, Translate, Reaksiya) sozlaydi, muallifsiz forward qiladi, tasodifiy qo‘ng‘iroq/stikerdan asraydi.",
-            "Хабарни икки марта босиш амалини (Reply, Copy, Translate, Реакция) созлайди, муаллифсиз forward қилади, тасодифий қўнғироқ/стикердан асрайди.",
-            "Chat bo‘limidan o‘zgartiring.", "Чат бўлимидан ўзгартиринг."),
-        new GuideEntry(0xFF10B981, R.drawable.msg_folders,
-            "Papkalar, Birinchi xabar & Avto-qabul", "Папкалар, Биринчи хабар & Авто-қабул",
-            "Interfeys & Tarmoq bo‘limlari", "Интерфейс & Тармоқ бўлимлари",
-            "Papkalar ikonkaga o‘tadi, cheksiz chat qadash (Pin), 1-xabarga sakrash va guruhga qo‘shilish so‘rovlarini avto-qabul qilish ishlaydi.",
-            "Папкалар иконкага ўтади, чексиз чат қадаш (Pin), 1-хабарга сакраш ва гуруҳга қўшилиш сўровларини авто-қабул қилиш ишлайди.",
+            "Double-Tap, Muallifsiz Forward va Stiker tasdiqlash", "Double-Tap, Муаллифсиз Forward ва Стикер тасдиқлаш",
+            "Xabarlar → Ikki marta bosganda / Forward / Stiker tasdiqlash", "Хабарлар → Икки марта босганда / Forward / Стикер тасдиқлаш",
+            "Xabarni ikki marta bosish amalini (Reply, Copy, Translate, Reaksiya) sozlaydi, forward da muallif/izohni yashiradi va stiker/GIF bosilganda tasdiq so‘raydi.",
+            "Хабарни икки марта босиш амалини (Reply, Copy, Translate, Реакция) созлайди, forward да муаллиф/изоҳни яширади ва стикер/GIF босилганда тасдиқ сўрайди.",
+            "Tegishli kalitlardan o‘zgartiring.", "Тегишли калитлардан ўзгартиринг."),
+        new GuideEntry(0xFF10B981, R.drawable.msg_calls,
+            "Qo‘ng‘iroq tasdiqlash & Qo‘ng‘iroq yozib olish", "Қўнғироқ тасдиқлаш & Қўнғироқ ёзиб олиш",
+            "Chat va Qo‘ng‘iroqlar → Tasdiqlash / Yozib olish", "Чат ва Қўнғироқлар → Тасдиқлаш / Ёзиб олиш",
+            "Tasodifiy qo‘ng‘iroq qilishdan himoyalaydi. «Qo‘ng‘iroqlarni yozib olish» yoqilsa, suhbat ulanganda audio .m4a formatda AeroGramCalls papkasiga yozib boriladi (ayrim Android qurilmalarda tizim cheklovi sabab faqat mikrofon ovozi yozilishi mumkin).",
+            "Тасодифий қўнғироқ қилишдан ҳимоялайди. «Қўнғироқларни ёзиб олиш» ёқилса, суҳбат уланганда аудио .m4a форматда AeroGramCalls папкасига ёзиб борилади (айрим Android қурилмаларда тизим чеклови сабаб фақат микрофон овози ёзилиши мумкин).",
+            "Kalitlarni o‘chiring.", "Калитларни ўчиринг."),
+        new GuideEntry(0xFFF59E0B, R.drawable.msg_notifications,
+            "O‘qilmagan xabar eslatmasi (Reminder)", "Ўқилмаган хабар эслатмаси (Reminder)",
+            "Tarmoq, Papkalar va Eslatmalar → Eslatma yoqish / Vaqt / Ovoz", "Тармоқ, Папкалар ва Эслатмалар → Эслатма ёқиш / Вақт / Овоз",
+            "Ovozsiz (Mute) qilinmagan chatda xabarni belgilangan daqiqadan ko‘proq vaqt o‘qimasangiz, ilova ichida eslatma chiqaradi va xohlasangiz signal chaladi.",
+            "Овозсиз (Mute) қилинмаган чатда хабарни белгиланган дақиқадан кўпроқ вақт ўқимасангиз, илова ичида эслатма чиқаради ва хоҳласангиз сигнал чалади.",
+            "Eslatma kalitini o‘chiring.", "Эслатма калитини ўчиринг."),
+        new GuideEntry(0xFF06B6D4, R.drawable.msg_camera,
+            "Galereyadan dumaloq video & Kamera sozlamalari", "Галереядан думалоқ видео & Камера созламалари",
+            "Interfeys → Galereyadan dumaloq / Kamera tanlash / Orqa kamera", "Интерфейс → Галереядан думалоқ / Камера танлаш / Орқа камера",
+            "Galereyadan 65 soniyagacha bo‘lgan oddiy videoni dumaloq video-xabar qilib yuborishingiz, kamera rejimiga o‘tganda Old/Orqa kamerani tanlashingiz yoki doim orqa kamera bilan boshlashingiz mumkin.",
+            "Галереядан 65 сониягача бўлган оддий видеони думалоқ видео-хабар қилиб юборишингиз, камера режимига ўтганда Олд/Орқа камерани танлашингиз ёки доим орқа камера билан бошлашингиз мумкин.",
             "Tegishli kalitlarni o‘chiring.", "Тегишли калитларни ўчиринг."),
-        new GuideEntry(0xFFEC4899, R.drawable.msg_stories_save,
-            "Hikoyalar (HD), Kamera va AeroGramProxy", "Ҳикоялар (HD), Камера ва AeroGramProxy",
-            "Interfeys → Stories HD / AeroGramProxy / Ilova ikonkasi", "Интерфейс → Stories HD / AeroGramProxy / Илова иконкаси",
-            "Hikoyalarni HD yuklaydi va saqlaydi, galereyadagi videoni dumaloq video-xabar qilib yuboradi va 6 xil Concept A ilova ikonkasini taqdim etadi.",
-            "Ҳикояларни HD юклайди ва сақлайди, галереядаги видеони думалоқ видео-хабар қилиб юборади ва 6 хил Concept A илова иконкасини тақдим этади.",
-            "Interfeys va Tarmoq bo‘limidan o‘chiring.", "Интерфейс ва Тармоқ бўлимидан ўчиринг.")
+        new GuideEntry(0xFF3B82F6, R.drawable.msg_folders,
+            "Papkalar, Cheksiz Pin, Yorug‘ Aksent, Stories HD, Ilova Ikonkasi & Proksi",
+            "Папкалар, Чексиз Пин, Ёруғ Аксент, Stories HD, Илова Иконкаси & Прокси",
+            "Tarmoq & Interfeys bo‘limlari", "Тармоқ & Интерфейс бўлимлари",
+            "Papkalarni ikonka uslubiga o‘tkazish, 5 tadan ko‘p chatni qadash (Pin), 1.2K o‘rniga aniq raqamlar, Xabar ID/DC/soniyalar, Yorug‘ mavzuda AeroGram osmon aksenti, Stories HD yuklash, 6 ta ilova ikonkasi va AeroGramProxy hammasi shu yerda!",
+            "Папкаларни иконка услубига ўтказиш, 5 тадан кўп чатни қадаш (Pin), 1.2K ўрнига аниқ рақамлар, Хабар ID/DC/сониялар, Ёруғ мавзуда AeroGram осмон акценти, Stories HD юклаш, 6 та илова иконкаси ва AeroGramProxy ҳаммаси шу ерда!",
+            "Har bir funksiya alohida kalit bilan boshqariladi.", "Ҳар бир функция алоҳида калит билан бошқарилади.")
     };
 
     private View getOrCreateAboutIntro(Context context) {
@@ -896,7 +926,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         badgeBg.setCornerRadius(dp(6));
         badgeBg.setColor(0xFF0284C7);
         TextView badge = new TextView(context);
-        badge.setText(AeroConfig.tr("AEROGRAM NIMA?", "AEROGRAM НИМА?"));
+        badge.setText("AEROGRAM v1.4.0 • BUILD 1006");
         badge.setTypeface(AndroidUtilities.bold());
         badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
         badge.setTextColor(Color.WHITE);
@@ -906,8 +936,8 @@ public class AeroSubSettingsActivity extends UniversalFragment {
 
         TextView desc = new TextView(context);
         desc.setText(AeroConfig.tr(
-            "AeroGram — Telegram bazasida yaratilgan tezkor, maxfiy va qulay mijoz. Quyida ilovadagi barcha funksiyalarni yoqish, ishlatish va o‘chirish bo‘yicha to‘liq qo‘llanma bilan tanishing.",
-            "AeroGram — Telegram базасида яратилган тезкор, махфий ва қулай мижоз. Қуйида иловадаги барча функцияларни ёқиш, ишлатиш ва ўчириш бўйича тўлиқ қўлланма билан танишинг."
+            "AeroGram — Telegram bazasida yaratilgan tezkor, maxfiy va qulay mijoz. Ghost rejimi, Anti-Delete, 1-martalik media saqlash (?? reply), Tahrirlar tarixi, PIN qulf, Avto-tarjima va O‘zbek tili uchun maxsus vositalarni o‘z ichiga oladi.",
+            "AeroGram — Telegram базасида яратилган тезкор, махфий ва қулай мижоз. Ghost режими, Anti-Delete, 1-марталик медиа сақлаш (?? reply), Таҳрирлар тарихи, ПИН қулф, Авто-таржима ва Ўзбек тили учун махсус воситаларни ўз ичига олади."
         ));
         desc.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         desc.setLineSpacing(dp(2), 1.0f);
@@ -918,17 +948,89 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         return aboutIntroView;
     }
 
+    private View getOrCreateGuideIntro(Context context) {
+        if (guideIntroView != null) {
+            return guideIntroView;
+        }
+        LinearLayout wrap = new LinearLayout(context);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(20), dp(18), dp(20), dp(18));
+
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setCornerRadius(dp(6));
+        badgeBg.setColor(0xFF0EA5E9);
+        TextView badge = new TextView(context);
+        badge.setText(AeroConfig.tr("QANDAY ISHLATILADI?", "ҚАНДАЙ ИШЛАТИЛАДИ?"));
+        badge.setTypeface(AndroidUtilities.bold());
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
+        badge.setTextColor(Color.WHITE);
+        badge.setPadding(dp(10), dp(4), dp(10), dp(4));
+        badge.setBackground(badgeBg);
+        wrap.addView(badge, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        TextView desc = new TextView(context);
+        desc.setText(AeroConfig.tr(
+            "Quyida AeroGram dagi har bir maxsus funksiyani qayerdan yoqish, amalda qanday ishlatish va kerak bo‘lsa qanday o‘chirish bo‘yicha to‘liq yo‘riqnoma keltirilgan.",
+            "Қуйида AeroGram даги ҳар бир махсус функцияни қаердан ёқиш, амалда қандай ишлатиш ва керак бўлса қандай ўчириш бўйича тўлиқ йўриқнома келтирилган."
+        ));
+        desc.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        desc.setLineSpacing(dp(2), 1.0f);
+        desc.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
+        wrap.addView(desc, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 10, 0, 0));
+
+        guideIntroView = wrap;
+        return guideIntroView;
+    }
+
     private void fillAboutItems(ArrayList<UItem> items) {
         if (getParentActivity() != null) {
             items.add(UItem.asCustom(1, getOrCreateAboutIntro(getParentActivity())));
+            items.add(UItem.asShadow(null));
+        }
+
+        items.add(UItem.asHeader(AeroConfig.tr("Ilova ma’lumotlari va Ko‘rsatkichlar", "Илова маълумотлари ва Кўрсаткичлар")));
+        items.add(AeroRowCell.Factory.ofNav(200, 0xFF0EA5E9, R.drawable.msg_help,
+            AeroConfig.tr("AeroGram Qo‘llanmasi", "AeroGram Қўлланмаси"),
+            AeroConfig.tr("Barcha funksiyalarni yoqish va ishlatish yo‘riqnomasini ochish", "Барча функцияларни ёқиш ва ишлатиш йўриқномасини очиш"),
+            AeroConfig.tr("Ochish", "Очиш"), AeroRowCell.BADGE_NEW));
+        items.add(AeroRowCell.Factory.ofNav(201, 0xFF10B981, R.drawable.msg_stats,
+            AeroConfig.tr("AeroGram Analitika", "AeroGram Аналитика"),
+            AeroConfig.tr("Saqlangan o‘chirilganlar: " + AeroDeletedStore.getTotalSavedCount()
+                + " • Tahrirlar: " + AeroEditHistoryStore.getTotalCount()
+                + " • Ghost bloklar: " + AeroConfig.statBlockedReads,
+                "Сақланган ўчирилганлар: " + AeroDeletedStore.getTotalSavedCount()
+                + " • Таҳрирлар: " + AeroEditHistoryStore.getTotalCount()
+                + " • Ghost блоклар: " + AeroConfig.statBlockedReads),
+            AeroConfig.tr("Batafsil", "Батафсил"), AeroRowCell.BADGE_AERO));
+
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(AeroConfig.tr("Rasmiy havolalar", "Расмий ҳаволалар")));
+        items.add(AeroRowCell.Factory.ofNav(202, 0xFF0284C7, R.drawable.msg_info,
+            AeroConfig.tr("Rasmiy veb-sayt", "Расмий веб-сайт"),
+            "https://aerogram-itz8.onrender.com/",
+            AeroConfig.tr("Ochish", "Очиш"), AeroRowCell.BADGE_NONE));
+        items.add(AeroRowCell.Factory.ofNav(203, 0xFF6366F1, R.drawable.msg_share,
+            "GitHub Relizlar",
+            "https://github.com/Bauntyme/AeroGram/releases",
+            "v1.4.0", AeroRowCell.BADGE_NONE));
+
+        items.add(UItem.asShadow(AeroConfig.tr(
+            "AeroGram v1.4.0 (Build 1006) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
+            "AeroGram v1.4.0 (Build 1006) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
+        )));
+    }
+
+    private void fillGuideItems(ArrayList<UItem> items) {
+        if (getParentActivity() != null) {
+            items.add(UItem.asCustom(1, getOrCreateGuideIntro(getParentActivity())));
             items.add(UItem.asShadow(null));
         }
         for (int i = 0; i < GUIDE_CARDS.length; i++) {
             items.add(GuideCardFactory.ofGuide(100 + i, GUIDE_CARDS[i], AeroConfig.uiCyrillic));
         }
         items.add(UItem.asShadow(AeroConfig.tr(
-            "Telegram ning barcha asosiy funksiyalari o‘zgarmagan — qo‘shimcha imkoniyatlarni AeroGram Sozlamalari orqali xohlagan payt boshqarishingiz mumkin.",
-            "Telegram нинг барча асосий функциялари ўзгармаган — қўшимча имкониятларни AeroGram Созламалари орқали хоҳлаган пайт бошқаришингиз мумкин."
+            "Istalgan funksiyani AeroGram Sozlamalari orqali darhol yoqishingiz yoki o‘chirishingiz mumkin.",
+            "Исталган функцияни AeroGram Созламалари орқали дарҳол ёқишингиз ёки ўчиришингиз мумкин."
         )));
     }
 
@@ -1068,7 +1170,18 @@ public class AeroSubSettingsActivity extends UniversalFragment {
 
     @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
-        if (mode == MODE_ABOUT || mode == MODE_STATS) {
+        if (mode == MODE_GUIDE || mode == MODE_STATS) {
+            return;
+        } else if (mode == MODE_ABOUT) {
+            if (item.id == 200) {
+                presentFragment(new AeroSubSettingsActivity(MODE_GUIDE));
+            } else if (item.id == 201) {
+                presentFragment(new AeroSubSettingsActivity(MODE_STATS));
+            } else if (item.id == 202 && getParentActivity() != null) {
+                Browser.openUrl(getParentActivity(), "https://aerogram-itz8.onrender.com/");
+            } else if (item.id == 203 && getParentActivity() != null) {
+                Browser.openUrl(getParentActivity(), "https://github.com/Bauntyme/AeroGram/releases");
+            }
             return;
         } else if (mode == MODE_BOTS) {
             String username = null;

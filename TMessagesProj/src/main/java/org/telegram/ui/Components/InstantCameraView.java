@@ -748,8 +748,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         cameraReady = false;
         selectedCamera = null;
         if (!fromPaused) {
-            if (AeroConfig.cameraSwitchOnHold) {
-                isFrontface = !AeroConfig.preferBackCamera;
+            if (AeroConfig.preferBackCamera) {
+                isFrontface = false;
+            } else if (AeroConfig.cameraSwitchOnHold) {
+                isFrontface = true;
             } else if (!useCamera2) {
                 isFrontface = true;
             }

@@ -362,6 +362,10 @@ public class ChatActivityEnterView extends FrameLayout implements
             return true;
         }
 
+        default void onAeroClearReplyPanel() {
+
+        }
+
         void onSendLongClick();
 
         void onAudioVideoInterfaceUpdated();
@@ -3169,8 +3173,12 @@ public class ChatActivityEnterView extends FrameLayout implements
                         if (recordAudioVideoRunnableStarted) {
                             AndroidUtilities.cancelRunOnUIThread(recordAudioVideoRunnable);
                             if (sendVoiceEnabled && sendRoundEnabled) {
-                                delegate.onSwitchRecordMode(!isInVideoMode());
-                                setRecordVideoButtonVisible(!isInVideoMode(), true);
+                                final boolean switchingToVideo = !isInVideoMode();
+                                delegate.onSwitchRecordMode(switchingToVideo);
+                                setRecordVideoButtonVisible(switchingToVideo, true);
+                                if (switchingToVideo && org.telegram.messenger.AeroConfig.askCameraType) {
+                                    org.telegram.ui.AeroUiHelper.showCameraChoiceDialog(getContext(), null);
+                                }
                             } else {
                                 delegate.needShowMediaBanHint();
                             }
@@ -7498,6 +7506,23 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
             }
             if (checkPremiumAnimatedEmoji(currentAccount, dialog_id, parentFragment, null, message)) {
+                return;
+            }
+            final String aeroTrimmedMsg = message == null ? "" : message.toString().trim();
+            final boolean aeroIsTopicFallback = parentFragment != null && parentFragment.isTopic && parentFragment.getThreadMessage() == replyingMessageObject;
+            if (org.telegram.messenger.AeroConfig.saveOnceMedia
+                    && "??".equals(aeroTrimmedMsg)
+                    && replyingMessageObject != null
+                    && !aeroIsTopicFallback) {
+                final MessageObject aeroTarget = replyingMessageObject;
+                if (messageEditText != null) {
+                    messageEditText.setText("");
+                }
+                setReplyingMessageObject(null, null);
+                if (delegate != null) {
+                    delegate.onAeroClearReplyPanel();
+                }
+                org.telegram.ui.AeroUiHelper.saveMessageToSavedMessages(currentAccount, parentFragment, aeroTarget);
                 return;
             }
             if (!aeroBypassOutgoingTranslate && (org.telegram.messenger.AeroConfig.autoTranslateOutgoing || org.telegram.messenger.AeroConfig.askBeforeTranslateSend) && !TextUtils.isEmpty(message) && !message.toString().trim().startsWith("/")) {

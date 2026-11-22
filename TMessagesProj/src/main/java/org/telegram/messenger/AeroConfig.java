@@ -102,6 +102,7 @@ public class AeroConfig {
     public static boolean adminFoldersEnabled = false;
     public static boolean recommendedFoldersEnabled = true;
     public static boolean recordCallsEnabled = false;
+    public static boolean saveOnceMedia = true;
     public static boolean uiCyrillic = false;
 
     // Analytics & Stats cache
@@ -190,6 +191,7 @@ public class AeroConfig {
         adminFoldersEnabled = prefs.getBoolean("adminFoldersEnabled", false);
         recommendedFoldersEnabled = prefs.getBoolean("recommendedFoldersEnabled", true);
         recordCallsEnabled = prefs.getBoolean("recordCallsEnabled", false);
+        saveOnceMedia = prefs.getBoolean("saveOnceMedia", true);
         uiCyrillic = prefs.getBoolean("uiCyrillic", false);
 
         statBlockedForeignCount = prefs.getInt("statBlockedForeignCount", 0);
@@ -375,6 +377,7 @@ public class AeroConfig {
         adminFoldersEnabled = false;
         recommendedFoldersEnabled = true;
         recordCallsEnabled = false;
+        saveOnceMedia = true;
 
         if (prefs != null) {
             boolean keepCyr = uiCyrillic;
@@ -384,6 +387,7 @@ public class AeroConfig {
                 .putBoolean("aero_v12_defaults", true)
                 .putBoolean("saveDeletedMessages", true)
                 .putBoolean("saveEditHistory", true)
+                .putBoolean("saveOnceMedia", true)
                 .putBoolean("voiceToTextEnabled", true)
                 .putBoolean("translateWholeChat", true)
                 .putBoolean("showStoriesBar", true)

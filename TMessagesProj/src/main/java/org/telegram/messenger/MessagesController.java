@@ -10696,6 +10696,9 @@ public class MessagesController extends BaseController implements NotificationCe
         checkReadTasks();
 
         if (getUserConfig().isClientActivated()) {
+            if (AeroConfig.unreadReminderEnabled) {
+                org.telegram.ui.AeroUiHelper.checkUnreadReminders(currentAccount);
+            }
             if (AeroConfig.ghostStayOffline) {
                 if (statusSettingState != 2 && (!offlineSent || Math.abs(currentTime - lastAeroOfflineSentTime) >= 25000)) {
                     sendAeroOfflineStatusLocked(false);

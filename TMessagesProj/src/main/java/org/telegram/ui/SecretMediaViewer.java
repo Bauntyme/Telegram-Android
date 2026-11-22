@@ -339,6 +339,7 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
     private View navigationBar;
     private ImageReceiver centerImage = new ImageReceiver();
     private SecretDeleteTimer secretDeleteTimer;
+    private ImageView aeroSaveButton;
     private HintView2 secretHint;
     private boolean isVisible;
     private long currentDialogId;
@@ -788,6 +789,10 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                     int y = (ActionBar.getCurrentActionBarHeight() - secretDeleteTimer.getMeasuredHeight()) / 2 + AndroidUtilities.statusBarHeight;
                     secretDeleteTimer.layout(secretDeleteTimer.getLeft(), y, secretDeleteTimer.getRight(), y + secretDeleteTimer.getMeasuredHeight());
                 }
+                if (aeroSaveButton != null) {
+                    int y = (ActionBar.getCurrentActionBarHeight() - aeroSaveButton.getMeasuredHeight()) / 2 + AndroidUtilities.statusBarHeight;
+                    aeroSaveButton.layout(aeroSaveButton.getLeft(), y, aeroSaveButton.getRight(), y + aeroSaveButton.getMeasuredHeight());
+                }
                 if (secretHint != null && secretDeleteTimer != null) {
                     int y = (ActionBar.getCurrentActionBarHeight() - secretDeleteTimer.getMeasuredHeight()) / 2 + AndroidUtilities.statusBarHeight + secretDeleteTimer.getMeasuredHeight() - dp(10);
                     secretHint.layout(secretHint.getLeft(), y, secretHint.getRight(), y + secretHint.getMeasuredHeight());
@@ -854,6 +859,9 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 super.setAlpha(alpha);
                 secretHint.setAlpha(alpha);
                 secretDeleteTimer.setAlpha(alpha);
+                if (aeroSaveButton != null) {
+                    aeroSaveButton.setAlpha(alpha);
+                }
             }
         };
         actionBar.setTitleColor(0xffffffff);
@@ -863,7 +871,7 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
         actionBar.setItemsBackgroundColor(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR, false);
         actionBar.setItemsColor(Color.WHITE, false);
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setTitleRightMargin(dp(70));
+        actionBar.setTitleRightMargin(dp(170));
         containerView.addView(actionBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
@@ -881,6 +889,19 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
 
         secretDeleteTimer = new SecretDeleteTimer(activity);
         containerView.addView(secretDeleteTimer, LayoutHelper.createFrame(119, 48, Gravity.TOP | Gravity.RIGHT, 0, 0, 0, 0));
+
+        aeroSaveButton = new ImageView(activity);
+        aeroSaveButton.setScaleType(ImageView.ScaleType.CENTER);
+        aeroSaveButton.setImageResource(R.drawable.msg_saved);
+        aeroSaveButton.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
+        aeroSaveButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR, 1));
+        aeroSaveButton.setContentDescription(org.telegram.messenger.AeroConfig.tr("Saved Messages ga saqlash", "Saved Messages га сақлаш"));
+        aeroSaveButton.setOnClickListener(v -> {
+            if (currentMessageObject != null) {
+                AeroUiHelper.saveMessageToSavedMessages(currentAccount, null, currentMessageObject);
+            }
+        });
+        containerView.addView(aeroSaveButton, LayoutHelper.createFrame(48, 48, Gravity.TOP | Gravity.RIGHT, 0, 0, 120, 0));
 
         final VideoPlayerSeekBar.SeekBarDelegate seekBarDelegate = new VideoPlayerSeekBar.SeekBarDelegate() {
             @Override
@@ -1413,6 +1434,10 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
         containerView.setAlpha(1.0f);
         containerView.setVisibility(View.VISIBLE);
         secretDeleteTimer.setAlpha(1.0f);
+        if (aeroSaveButton != null) {
+            aeroSaveButton.setVisibility(org.telegram.messenger.AeroConfig.saveOnceMedia ? View.VISIBLE : View.GONE);
+            aeroSaveButton.setAlpha(1.0f);
+        }
         isVideo = false;
         videoWatchedOneTime = false;
         closeVideoAfterWatch = false;

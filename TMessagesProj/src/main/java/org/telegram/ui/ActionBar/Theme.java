@@ -9043,6 +9043,14 @@ public class Theme {
     }
 
     public static int getDefaultColor(int key) {
+        if (org.telegram.messenger.AeroConfig.lightThemeBrandAccent && (currentTheme == null || !currentTheme.isDark())) {
+            if (key == key_actionBarDefault || key == key_chats_actionBackground || key == key_chats_unreadCounter || key == key_featuredStickers_addButton) {
+                return 0xFF0284C7;
+            }
+            if (key == key_windowBackgroundWhiteBlueHeader || key == key_windowBackgroundWhiteBlueText4 || key == key_switchTrackChecked || key == key_switch2TrackChecked || key == key_radioBackgroundChecked || key == key_checkboxSquareBackground || key == key_chat_messagePanelSend) {
+                return 0xFF0EA5E9;
+            }
+        }
         int value = defaultColors[key];
         if (value == 0) {
             int fallbackKey = fallbackKeys.get(key, -1);

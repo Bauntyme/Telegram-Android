@@ -1,6 +1,16 @@
 package org.telegram.ui;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.media.MediaRecorder;
+import android.media.MediaScannerConnection;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.os.SystemClock;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.text.method.PasswordTransformationMethod;
@@ -12,14 +22,23 @@ import android.widget.Toast;
 import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AeroEditHistoryStore;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.R;
 import org.telegram.messenger.TranslateController;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.BulletinFactory;
+
+import java.io.File;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -287,5 +306,196 @@ public class AeroUiHelper {
         } else {
             doTranslate.run();
         }
+    }
+
+    public static void saveMessageToSavedMessages(int currentAccount, BaseFragment fragment, MessageObject msg) {
+        AeroOnceSaver.saveToSavedMessages(currentAccount, fragment, msg);
+    }
+
+    private static long lastReminderScanMs = 0L;
+    private static long lastReminderShownMs = 0L;
+
+    public static void checkUnreadReminders(int currentAccount) {
+        if (!AeroConfig.unreadReminderEnabled || ApplicationLoader.applicationContext == null) {
+            return;
+        }
+        long nowMs = SystemClock.elapsedRealtime();
+        if (lastReminderScanMs != 0 && nowMs - lastReminderScanMs < 45_000L) {
+            return;
+        }
+        lastReminderScanMs = nowMs;
+
+        int delayMin = Math.max(1, AeroConfig.unreadReminderMinutes);
+        long cooldownMs = delayMin * 60_000L;
+        if (lastReminderShownMs == 0) {
+            lastReminderShownMs = nowMs - Math.max(0L, cooldownMs - 60_000L);
+            return;
+        }
+        if (nowMs - lastReminderShownMs < cooldownMs) {
+            return;
+        }
+
+        MessagesController mc = MessagesController.getInstance(currentAccount);
+        if (mc == null) {
+            return;
+        }
+        ArrayList<TLRPC.Dialog> dialogs = mc.getAllDialogs();
+        if (dialogs == null || dialogs.isEmpty()) {
+            return;
+        }
+        int nowSec = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
+        int thresholdSec = delayMin * 60;
+        int maxAgeSec = 48 * 3600;
+        int overdueCount = 0;
+
+        for (int i = 0, size = dialogs.size(); i < size; i++) {
+            TLRPC.Dialog d = dialogs.get(i);
+            if (d == null || d.unread_count <= 0) {
+                continue;
+            }
+            if (mc.isDialogMuted(d.id, 0)) {
+                continue;
+            }
+            int ageSec = nowSec - d.last_message_date;
+            if (ageSec >= thresholdSec && ageSec <= maxAgeSec) {
+                overdueCount++;
+            }
+        }
+
+        if (overdueCount <= 0) {
+            return;
+        }
+        lastReminderShownMs = nowMs;
+        final int finalCount = overdueCount;
+
+        AndroidUtilities.runOnUIThread(() -> {
+            String msgText = AeroConfig.tr(
+                "⏰ " + finalCount + " ta o‘qilmagan chatda javob kutilmoqda",
+                "⏰ " + finalCount + " та ўқилмаган чатда жавоб кутилмоқда"
+            );
+            try {
+                BaseFragment lastFragment = LaunchActivity.getLastFragment();
+                if (lastFragment != null && lastFragment.getParentActivity() != null && lastFragment.getFragmentView() != null) {
+                    BulletinFactory.of(lastFragment).createImageBulletin(R.drawable.msg_notifications, msgText).show();
+                } else {
+                    Toast.makeText(ApplicationLoader.applicationContext, msgText, Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception ignore) {
+                Toast.makeText(ApplicationLoader.applicationContext, msgText, Toast.LENGTH_SHORT).show();
+            }
+
+            if (AeroConfig.unreadReminderSound) {
+                try {
+                    Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                    if (alarmUri != null) {
+                        Ringtone ringtone = RingtoneManager.getRingtone(ApplicationLoader.applicationContext, alarmUri);
+                        if (ringtone != null) {
+                            ringtone.play();
+                        }
+                    }
+                } catch (Exception ignore) {}
+            }
+        });
+    }
+
+    private static MediaRecorder callRecorder;
+    private static File callRecordFile;
+
+    public static synchronized void startAeroCallRecording(Context context, String peerName) {
+        if (!AeroConfig.recordCallsEnabled || context == null || callRecorder != null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 23 && context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        try {
+            File baseDir = null;
+            if (Build.VERSION.SDK_INT < 29) {
+                baseDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "AeroGramCalls");
+            }
+            if (baseDir == null || (!baseDir.exists() && !baseDir.mkdirs())) {
+                File ext = context.getExternalFilesDir("AeroGramCalls");
+                baseDir = ext != null ? ext : new File(context.getFilesDir(), "AeroGramCalls");
+            }
+            if (!baseDir.exists()) {
+                baseDir.mkdirs();
+            }
+            String safePeer = TextUtils.isEmpty(peerName) ? "call" : peerName.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+            if (safePeer.length() > 24) {
+                safePeer = safePeer.substring(0, 24);
+            }
+            String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            callRecordFile = new File(baseDir, "AeroCall_" + safePeer + "_" + stamp + ".m4a");
+
+            MediaRecorder recorder = new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioEncodingBitRate(64000);
+            recorder.setAudioSamplingRate(32000);
+            recorder.setOutputFile(callRecordFile.getAbsolutePath());
+            recorder.prepare();
+            recorder.start();
+            callRecorder = recorder;
+        } catch (Throwable t) {
+            FileLog.e(t);
+            releaseRecorderQuietly();
+            if (callRecordFile != null && callRecordFile.exists()) {
+                try {
+                    callRecordFile.delete();
+                } catch (Exception ignore) {}
+            }
+            callRecordFile = null;
+        }
+    }
+
+    public static synchronized void stopAeroCallRecording(Context context) {
+        if (callRecorder == null) {
+            return;
+        }
+        try {
+            callRecorder.stop();
+        } catch (Throwable ignore) {}
+        releaseRecorderQuietly();
+
+        final File saved = callRecordFile;
+        callRecordFile = null;
+        if (saved != null && saved.exists() && saved.length() > 1024) {
+            if (context != null) {
+                try {
+                    MediaScannerConnection.scanFile(context.getApplicationContext(), new String[]{saved.getAbsolutePath()}, null, null);
+                } catch (Exception ignore) {}
+                AndroidUtilities.runOnUIThread(() ->
+                    Toast.makeText(
+                        context.getApplicationContext(),
+                        AeroConfig.tr("🎙 Qo‘ng‘iroq yozuvi saqlandi: ", "🎙 Қўнғироқ ёзуви сақланди: ") + saved.getName(),
+                        Toast.LENGTH_LONG
+                    ).show()
+                );
+            }
+        } else if (saved != null && saved.exists()) {
+            try {
+                saved.delete();
+            } catch (Exception ignore) {}
+        }
+    }
+
+    private static void releaseRecorderQuietly() {
+        if (callRecorder != null) {
+            try {
+                callRecorder.reset();
+            } catch (Throwable ignore) {}
+            try {
+                callRecorder.release();
+            } catch (Throwable ignore) {}
+            callRecorder = null;
+        }
+    }
+
+    public static void notifyLightBrandAccentChanged() {
+        boolean isDark = Theme.getCurrentTheme() != null && Theme.getCurrentTheme().isDark();
+        AndroidUtilities.runOnUIThread(() ->
+            NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didSetNewTheme, isDark, true)
+        );
     }
 }

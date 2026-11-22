@@ -1299,6 +1299,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_WELCOME_REVERT = 116;
     public final static int OPTION_SEND_MONEY = 117;
     public final static int OPTION_EDIT_HISTORY = 119;
+    public final static int OPTION_SAVE_TO_SAVED_ONCE = 120;
     public final static int OPTION_STOP_LIVE_LOCATION = 118;
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
@@ -2088,6 +2089,13 @@ public class ChatActivity extends BaseFragment implements
         @Override
         public TLRPC.TL_channels_sendAsPeers getSendAsPeers() {
             return sendAsPeersObj;
+        }
+
+        @Override
+        public void onAeroClearReplyPanel() {
+            hideFieldPanel(false);
+            replyingMessageObject = null;
+            replyingQuote = null;
         }
 
         @Override
@@ -34495,6 +34503,12 @@ public class ChatActivity extends BaseFragment implements
                 }
                 break;
             }
+            case OPTION_SAVE_TO_SAVED_ONCE: {
+                if (selectedObject != null) {
+                    AeroUiHelper.saveMessageToSavedMessages(currentAccount, ChatActivity.this, selectedObject);
+                }
+                break;
+            }
             case OPTION_COPY: {
                 final TL_iv.RichMessage copyRichMessage = selectedObject.messageOwner != null ? selectedObject.messageOwner.rich_message : null;
                 if (selectedObject.isDice()) {
@@ -46784,6 +46798,11 @@ public class ChatActivity extends BaseFragment implements
                     items.add(AeroConfig.tr("Tahrirlar tarixi", "Таҳрирлар тарихи"));
                     options.add(OPTION_EDIT_HISTORY);
                     icons.add(R.drawable.msg_recent);
+                }
+                if (AeroConfig.saveOnceMedia && selectedObject != null && (selectedObject.isSecretMedia() || selectedObject.isVoiceOnce() || selectedObject.isRoundOnce())) {
+                    items.add(AeroConfig.tr("Saved Messages ga saqlash", "Saved Messages га сақлаш"));
+                    options.add(OPTION_SAVE_TO_SAVED_ONCE);
+                    icons.add(R.drawable.msg_saved);
                 }
                 if (ChatObject.isMonoForum(currentChat) && selectedObject.getGroupId() == 0 && selectedObjectGroup == null && message != null && message.messageOwner != null && message.messageOwner.suggested_post == null && message.messageOwner.action == null) {
                     items.add(LocaleController.getString(R.string.EditOfferAdd));

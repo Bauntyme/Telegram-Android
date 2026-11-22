@@ -4284,6 +4284,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (BuildVars.LOGS_ENABLED) {
 			FileLog.d("=============== VoIPService STOPPING ===============");
 		}
+		org.telegram.ui.AeroUiHelper.stopAeroCallRecording(this);
 		stopForeground(true);
 		stopRinging();
 		if (currentAccount >= 0) {
@@ -4958,6 +4959,10 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		currentState = state;
 		if (currentState == STATE_ESTABLISHED) {
 			destroyConverting();
+			if (org.telegram.messenger.AeroConfig.recordCallsEnabled) {
+				String peer = user != null ? UserObject.getUserName(user) : "call";
+				org.telegram.ui.AeroUiHelper.startAeroCallRecording(this, peer);
+			}
 		}
 		if (USE_CONNECTION_SERVICE && state == STATE_ESTABLISHED /*&& !wasEstablished*/ && systemCallConnection != null) {
 			systemCallConnection.setActive();
