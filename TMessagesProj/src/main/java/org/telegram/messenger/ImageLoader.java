@@ -2191,9 +2191,64 @@ public class ImageLoader {
         AndroidUtilities.createEmptyFile(new File(cachePath, ".nomedia"));
         mediaDirs.put(FileLoader.MEDIA_DIR_CACHE, cachePath);
 
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            final int currentAccount = a;
-            FileLoader.getInstance(a).setDelegate(new FileLoader.FileLoaderDelegate() {
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            attachFileLoaderDelegate(a);
+        }
+        NotificationCenter.getGlobalInstance().addObserver((id, account, args) -> {
+            if (id == NotificationCenter.accountSlotAllocated && args != null && args.length > 0 && args[0] instanceof Integer) {
+                attachFileLoaderDelegate((Integer) args[0]);
+            }
+        }, NotificationCenter.accountSlotAllocated);
+        FileLoader.setMediaDirs(mediaDirs);
+
+        BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context arg0, Intent intent) {
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("file system changed");
+                }
+                Runnable r = () -> checkMediaPaths();
+                if (Intent.ACTION_MEDIA_UNMOUNTED.equals(intent.getAction())) {
+                    AndroidUtilities.runOnUIThread(r, 1000);
+                } else {
+                    r.run();
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_MEDIA_BAD_REMOVAL);
+        filter.addAction(Intent.ACTION_MEDIA_CHECKING);
+        filter.addAction(Intent.ACTION_MEDIA_EJECT);
+        filter.addAction(Intent.ACTION_MEDIA_MOUNTED);
+        filter.addAction(Intent.ACTION_MEDIA_NOFS);
+        filter.addAction(Intent.ACTION_MEDIA_REMOVED);
+        filter.addAction(Intent.ACTION_MEDIA_SHARED);
+        filter.addAction(Intent.ACTION_MEDIA_UNMOUNTABLE);
+        filter.addAction(Intent.ACTION_MEDIA_UNMOUNTED);
+        filter.addDataScheme("file");
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                ApplicationLoader.applicationContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                ApplicationLoader.applicationContext.registerReceiver(receiver, filter);
+            }
+        } catch (Throwable ignore) {
+
+        }
+
+        checkMediaPaths();
+    }
+
+    private final HashSet<Integer> delegatedAccounts = new HashSet<>();
+
+    private void attachFileLoaderDelegate(final int currentAccount) {
+        synchronized (delegatedAccounts) {
+            if (!delegatedAccounts.add(currentAccount)) {
+                return;
+            }
+        }
+        FileLoader.getInstance(currentAccount).setDelegate(new FileLoader.FileLoaderDelegate() {
                 @Override
                 public void fileUploadProgressChanged(FileUploadOperation operation, final String location, long uploadedSize, long totalSize, final boolean isEncrypted) {
                     fileProgresses.put(location, new long[]{uploadedSize, totalSize});
@@ -2322,46 +2377,6 @@ public class ImageLoader {
                     }
                 }
             });
-        }
-        FileLoader.setMediaDirs(mediaDirs);
-
-        BroadcastReceiver receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context arg0, Intent intent) {
-                if (BuildVars.LOGS_ENABLED) {
-                    FileLog.d("file system changed");
-                }
-                Runnable r = () -> checkMediaPaths();
-                if (Intent.ACTION_MEDIA_UNMOUNTED.equals(intent.getAction())) {
-                    AndroidUtilities.runOnUIThread(r, 1000);
-                } else {
-                    r.run();
-                }
-            }
-        };
-
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(Intent.ACTION_MEDIA_BAD_REMOVAL);
-        filter.addAction(Intent.ACTION_MEDIA_CHECKING);
-        filter.addAction(Intent.ACTION_MEDIA_EJECT);
-        filter.addAction(Intent.ACTION_MEDIA_MOUNTED);
-        filter.addAction(Intent.ACTION_MEDIA_NOFS);
-        filter.addAction(Intent.ACTION_MEDIA_REMOVED);
-        filter.addAction(Intent.ACTION_MEDIA_SHARED);
-        filter.addAction(Intent.ACTION_MEDIA_UNMOUNTABLE);
-        filter.addAction(Intent.ACTION_MEDIA_UNMOUNTED);
-        filter.addDataScheme("file");
-        try {
-            if (Build.VERSION.SDK_INT >= 33) {
-                ApplicationLoader.applicationContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                ApplicationLoader.applicationContext.registerReceiver(receiver, filter);
-            }
-        } catch (Throwable ignore) {
-
-        }
-
-        checkMediaPaths();
     }
 
     private int sizeOfBitmapDrawable(BitmapDrawable value) {

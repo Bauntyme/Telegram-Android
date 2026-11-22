@@ -657,18 +657,9 @@ public class BotForumHelper extends BaseController {
         preferences = ApplicationLoader.applicationContext.getSharedPreferences("bot_drafts" + currentAccount, Activity.MODE_PRIVATE);
     }
 
-    private static volatile BotForumHelper[] Instance = new BotForumHelper[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<BotForumHelper> Instance = new AccountInstanceMap<>();
     public static BotForumHelper getInstance(final int num) {
-        BotForumHelper localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (BotForumHelper.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new BotForumHelper(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, BotForumHelper::new);
     }
 
 

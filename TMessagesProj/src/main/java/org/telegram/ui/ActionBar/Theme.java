@@ -76,6 +76,7 @@ import androidx.core.math.MathUtils;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.Bitmaps;
@@ -2251,9 +2252,9 @@ public class Theme {
 
     private static int loadingCurrentTheme;
     private static int lastLoadingCurrentThemeTime;
-    private static boolean[] loadingRemoteThemes = new boolean[UserConfig.MAX_ACCOUNT_COUNT];
-    private static int[] lastLoadingThemesTime = new int[UserConfig.MAX_ACCOUNT_COUNT];
-    private static long[] remoteThemesHash = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap.BoolArray loadingRemoteThemes = new AccountInstanceMap.BoolArray();
+    private static final AccountInstanceMap.IntArray lastLoadingThemesTime = new AccountInstanceMap.IntArray();
+    private static final AccountInstanceMap.LongArray remoteThemesHash = new AccountInstanceMap.LongArray();
 
     public static ArrayList<ThemeInfo> themes;
     private static ArrayList<ThemeInfo> otherThemes;
@@ -4103,9 +4104,9 @@ public class Theme {
         int remoteVersion = themeConfig.getInt("remote_version", 0);
         int appRemoteThemesVersion = 1;
         if (remoteVersion == appRemoteThemesVersion) {
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                remoteThemesHash[a] = themeConfig.getLong("2remoteThemesHash" + (a != 0 ? a : ""), 0);
-                lastLoadingThemesTime[a] = themeConfig.getInt("lastLoadingThemesTime" + (a != 0 ? a : ""), 0);
+            for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+                remoteThemesHash.set(a, themeConfig.getLong("2remoteThemesHash" + (a != 0 ? a : ""), 0));
+                lastLoadingThemesTime.set(a, themeConfig.getInt("lastLoadingThemesTime" + (a != 0 ? a : ""), 0));
             }
         }
         themeConfig.edit().putInt("remote_version", appRemoteThemesVersion).apply();
@@ -6450,9 +6451,9 @@ public class Theme {
             }
             editor.putString("themes2", array.toString());
         }
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            editor.putLong("2remoteThemesHash" + (a != 0 ? a : ""), remoteThemesHash[a]);
-            editor.putInt("lastLoadingThemesTime" + (a != 0 ? a : ""), lastLoadingThemesTime[a]);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            editor.putLong("2remoteThemesHash" + (a != 0 ? a : ""), remoteThemesHash.get(a));
+            editor.putInt("lastLoadingThemesTime" + (a != 0 ? a : ""), lastLoadingThemesTime.get(a));
         }
 
         editor.putInt("lastLoadingCurrentThemeTime", lastLoadingCurrentThemeTime);
@@ -7041,24 +7042,24 @@ public class Theme {
     }
 
     public static void loadRemoteThemes(final int currentAccount, boolean force) {
-        if (loadingRemoteThemes[currentAccount] || !force && Math.abs(System.currentTimeMillis() / 1000 - lastLoadingThemesTime[currentAccount]) < 60 * 60 || !UserConfig.getInstance(currentAccount).isClientActivated()) {
+        if (loadingRemoteThemes.get(currentAccount) || !force && Math.abs(System.currentTimeMillis() / 1000 - lastLoadingThemesTime.get(currentAccount)) < 60 * 60 || !UserConfig.getInstance(currentAccount).isClientActivated()) {
             return;
         }
-        loadingRemoteThemes[currentAccount] = true;
+        loadingRemoteThemes.set(currentAccount, true);
         TL_account.getThemes req = new TL_account.getThemes();
         req.format = "android";
         if (!MediaDataController.getInstance(currentAccount).defaultEmojiThemes.isEmpty()) {
-            req.hash = remoteThemesHash[currentAccount];
+            req.hash = remoteThemesHash.get(currentAccount);
         }
         if (BuildVars.LOGS_ENABLED) {
             Log.i("theme", "loading remote themes, hash " + req.hash);
         }
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-            loadingRemoteThemes[currentAccount] = false;
+            loadingRemoteThemes.set(currentAccount, false);
             if (response instanceof TL_account.TL_themes) {
                 TL_account.TL_themes res = (TL_account.TL_themes) response;
-                remoteThemesHash[currentAccount] = res.hash;
-                lastLoadingThemesTime[currentAccount] = (int) (System.currentTimeMillis() / 1000);
+                remoteThemesHash.set(currentAccount, res.hash);
+                lastLoadingThemesTime.set(currentAccount, (int) (System.currentTimeMillis() / 1000));
                 ArrayList<TLRPC.TL_theme> emojiPreviewThemes = new ArrayList<>();
                 ArrayList<Object> oldServerThemes = new ArrayList<>();
                 for (int a = 0, N = themes.size(); a < N; a++) {

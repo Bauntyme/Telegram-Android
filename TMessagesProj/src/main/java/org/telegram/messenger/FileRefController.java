@@ -56,19 +56,10 @@ public class FileRefController extends BaseController {
     private ArrayList<Waiter> recentStickersWaiter = new ArrayList<>();
     private ArrayList<Waiter> favStickersWaiter = new ArrayList<>();
 
-    private static volatile FileRefController[] Instance = new FileRefController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<FileRefController> Instance = new AccountInstanceMap<>();
 
     public static FileRefController getInstance(int num) {
-        FileRefController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (FileRefController.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new FileRefController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, FileRefController::new);
     }
 
     public FileRefController(int instance) {

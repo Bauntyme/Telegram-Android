@@ -118,19 +118,10 @@ public class StatsController extends BaseController {
         }
     };
 
-    private static volatile StatsController[] Instance = new StatsController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<StatsController> Instance = new AccountInstanceMap<>();
 
     public static StatsController getInstance(int num) {
-        StatsController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (StatsController.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new StatsController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, StatsController::new);
     }
 
     private StatsController(int account) {

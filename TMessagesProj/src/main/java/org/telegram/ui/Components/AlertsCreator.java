@@ -7715,7 +7715,9 @@ public class AlertsCreator {
         }
 
         builder.setTitle(LocaleController.getString(R.string.SelectAccount));
-        builder.setView(linearLayout);
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(parentActivity);
+        scrollView.addView(linearLayout);
+        builder.setView(scrollView);
         builder.setPositiveButton(LocaleController.getString(R.string.Cancel), null);
         return alertDialog[0] = builder.create();
     }

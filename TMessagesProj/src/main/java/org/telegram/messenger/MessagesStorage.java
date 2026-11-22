@@ -110,13 +110,7 @@ public class MessagesStorage extends BaseController {
 
     private final CountDownLatch openSync = new CountDownLatch(1);
 
-    private static volatile MessagesStorage[] Instance = new MessagesStorage[UserConfig.MAX_ACCOUNT_COUNT];
-    private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
-    static {
-        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
-            lockObjects[i] = new Object();
-        }
-    }
+    private static final AccountInstanceMap<MessagesStorage> Instance = new AccountInstanceMap<>();
 
     public final static int LAST_DB_VERSION = 181;
     private boolean databaseMigrationInProgress;
@@ -131,16 +125,7 @@ public class MessagesStorage extends BaseController {
 
 
     public static MessagesStorage getInstance(int num) {
-        MessagesStorage localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (lockObjects[num]) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new MessagesStorage(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, MessagesStorage::new);
     }
 
     private void ensureOpened() {

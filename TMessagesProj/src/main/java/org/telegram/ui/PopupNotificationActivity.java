@@ -86,6 +86,20 @@ import java.util.ArrayList;
 
 public class PopupNotificationActivity extends Activity implements NotificationCenter.NotificationCenterDelegate {
 
+    private final android.util.SparseBooleanArray observedAccounts = new android.util.SparseBooleanArray();
+
+    private void attachAccountObservers(int a) {
+        if (observedAccounts.get(a)) {
+            return;
+        }
+        observedAccounts.put(a, true);
+        NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.appDidLogout);
+        NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.updateInterfaces);
+        NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
+        NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.messagePlayingDidReset);
+        NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.contactsDidLoad);
+    }
+
     private ActionBar actionBar;
     private ChatActivityEnterView chatActivityEnterView;
     private BackupImageView avatarImageView;
@@ -166,15 +180,12 @@ public class PopupNotificationActivity extends Activity implements NotificationC
         Theme.createChatResources(this, false);
 
         AndroidUtilities.fillStatusBarHeight(this, false);
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.appDidLogout);
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.updateInterfaces);
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.messagePlayingDidReset);
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.contactsDidLoad);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            attachAccountObservers(a);
         }
         NotificationCenter.getGlobalInstance().addWeakObserver(this, NotificationCenter.pushMessagesUpdated);
         NotificationCenter.getGlobalInstance().addWeakObserver(this, NotificationCenter.emojiLoaded);
+        NotificationCenter.getGlobalInstance().addWeakObserver(this, NotificationCenter.accountSlotAllocated);
         classGuid = ConnectionsManager.generateClassGuid();
 
         statusDrawables[0] = new TypingDotsDrawable(false);
@@ -1465,6 +1476,12 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.accountSlotAllocated) {
+            if (args != null && args.length > 0 && args[0] instanceof Integer) {
+                attachAccountObservers((Integer) args[0]);
+            }
+            return;
+        }
         if (id == NotificationCenter.appDidLogout) {
             if (account == lastResumedAccount) {
                 onFinish();
@@ -1589,15 +1606,18 @@ public class PopupNotificationActivity extends Activity implements NotificationC
         if (isReply) {
             popupMessages.clear();
         }
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+        for (int i = 0; i < observedAccounts.size(); i++) {
+            int a = observedAccounts.keyAt(i);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.appDidLogout);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.updateInterfaces);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.messagePlayingDidReset);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.contactsDidLoad);
         }
+        observedAccounts.clear();
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.pushMessagesUpdated);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.accountSlotAllocated);
         if (chatActivityEnterView != null) {
             chatActivityEnterView.onDestroy();
         }

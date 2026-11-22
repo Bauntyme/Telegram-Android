@@ -3,6 +3,7 @@ package org.telegram.ui.Business;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
 
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
@@ -22,24 +23,9 @@ import java.util.ArrayList;
 
 public class TimezonesController {
 
-    private static volatile TimezonesController[] Instance = new TimezonesController[UserConfig.MAX_ACCOUNT_COUNT];
-    private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
-    static {
-        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
-            lockObjects[i] = new Object();
-        }
-    }
+    private static final AccountInstanceMap<TimezonesController> Instance = new AccountInstanceMap<>();
     public static TimezonesController getInstance(int num) {
-        TimezonesController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (lockObjects[num]) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new TimezonesController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, TimezonesController::new);
     }
 
     public final int currentAccount;

@@ -17,6 +17,7 @@ import androidx.annotation.Nullable;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
@@ -137,19 +138,10 @@ public class GramWallet implements GramWalletStreaming.IGramWalletStreamingSubsc
     private final HashMap<TL_wallet.walletTransaction, GramWalletPolling> polling = new HashMap<>();
     private String pollingAddress;
 
-    private static volatile GramWallet[] Instance = new GramWallet[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<GramWallet> Instance = new AccountInstanceMap<>();
 
     public static GramWallet getInstance(int num) {
-        GramWallet localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (GramWallet.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new GramWallet(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, GramWallet::new);
     }
 
     public static void ensureLocalWalletBalances(int currentAccount, Runnable whenDone) {

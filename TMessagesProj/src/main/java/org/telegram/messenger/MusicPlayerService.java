@@ -91,15 +91,26 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
         return null;
     }
 
+    private final android.util.SparseBooleanArray observedAccounts = new android.util.SparseBooleanArray();
+
+    private void attachAccountObservers(int a) {
+        if (observedAccounts.get(a)) {
+            return;
+        }
+        observedAccounts.put(a, true);
+        NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.messagePlayingDidSeek);
+        NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
+        NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.httpFileDidLoad);
+        NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.fileLoaded);
+    }
+
     @Override
     public void onCreate() {
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.messagePlayingDidSeek);
-            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
-            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.httpFileDidLoad);
-            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.fileLoaded);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            attachAccountObservers(a);
         }
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.accountSlotAllocated);
         imageReceiver = new ImageReceiver(null);
         imageReceiver.setDelegate((imageReceiver, set, thumb, memCache) -> {
             if (set && !TextUtils.isEmpty(loadingFilePath)) {
@@ -822,16 +833,25 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
         if (mediaSession != null) {
             mediaSession.release();
         }
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.accountSlotAllocated);
+        for (int i = 0; i < observedAccounts.size(); i++) {
+            int a = observedAccounts.keyAt(i);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.messagePlayingDidSeek);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.httpFileDidLoad);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.fileLoaded);
         }
+        observedAccounts.clear();
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.accountSlotAllocated) {
+            if (args != null && args.length > 0 && args[0] instanceof Integer) {
+                attachAccountObservers((Integer) args[0]);
+            }
+            return;
+        }
         if (id == NotificationCenter.messagePlayingPlayStateChanged) {
             MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
             if (messageObject != null) {

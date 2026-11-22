@@ -27,6 +27,7 @@ import com.google.android.play.core.integrity.IntegrityTokenResponse;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BaseController;
@@ -196,18 +197,13 @@ public class ConnectionsManager extends BaseController {
 
     private static int lastClassGuid = 1;
     
-    private static final ConnectionsManager[] Instance = new ConnectionsManager[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<ConnectionsManager> Instance = new AccountInstanceMap<>();
     public static ConnectionsManager getInstance(int num) {
-        ConnectionsManager localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (ConnectionsManager.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new ConnectionsManager(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, ConnectionsManager::new);
+    }
+
+    public static ConnectionsManager getInstanceIfExists(int num) {
+        return Instance.getIfExists(num);
     }
 
     public ConnectionsManager(int instance) {
@@ -718,8 +714,10 @@ public class ConnectionsManager extends BaseController {
 
     public static void setLangCode(String langCode) {
         langCode = langCode.replace('_', '-').toLowerCase();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            native_setLangCode(a, langCode);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            if (a == 0 || UserConfig.getInstance(a).isClientActivated() || getInstanceIfExists(a) != null) {
+                native_setLangCode(a, langCode);
+            }
         }
     }
 
@@ -735,15 +733,19 @@ public class ConnectionsManager extends BaseController {
             String tag = type == PushListenerController.PUSH_TYPE_FIREBASE ? "FIREBASE" : "HUAWEI";
             pushString = SharedConfig.pushStringStatus = "__" + tag + "_GENERATING_SINCE_" + getInstance(0).getCurrentTime() + "__";
         }
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            native_setRegId(a, pushString);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            if (a == 0 || UserConfig.getInstance(a).isClientActivated() || getInstanceIfExists(a) != null) {
+                native_setRegId(a, pushString);
+            }
         }
     }
 
     public static void setSystemLangCode(String langCode) {
         langCode = langCode.replace('_', '-').toLowerCase();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            native_setSystemLangCode(a, langCode);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            if (a == 0 || UserConfig.getInstance(a).isClientActivated() || getInstanceIfExists(a) != null) {
+                native_setSystemLangCode(a, langCode);
+            }
         }
     }
 
@@ -1012,15 +1014,17 @@ public class ConnectionsManager extends BaseController {
             WebProxyTransport.stop();
         }
 
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (enabled && settings != null && settings.isValid()) {
-                native_setProxySettings(a, address, port, username, password, secret);
-            } else {
-                native_setProxySettings(a, "", 1080, "", "", "");
-            }
-            AccountInstance accountInstance = AccountInstance.getInstance(a);
-            if (accountInstance.getUserConfig().isClientActivated()) {
-                accountInstance.getMessagesController().checkPromoInfo(true);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            if (a == 0 || UserConfig.getInstance(a).isClientActivated() || getInstanceIfExists(a) != null) {
+                if (enabled && settings != null && settings.isValid()) {
+                    native_setProxySettings(a, address, port, username, password, secret);
+                } else {
+                    native_setProxySettings(a, "", 1080, "", "", "");
+                }
+                AccountInstance accountInstance = AccountInstance.getInstance(a);
+                if (accountInstance.getUserConfig().isClientActivated()) {
+                    accountInstance.getMessagesController().checkPromoInfo(true);
+                }
             }
         }
     }

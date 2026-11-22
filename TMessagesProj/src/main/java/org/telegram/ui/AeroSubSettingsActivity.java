@@ -745,15 +745,13 @@ public class AeroSubSettingsActivity extends UniversalFragment {
                 curr ? AeroRowCell.BADGE_NEW : AeroRowCell.BADGE_NONE));
         }
         items.add(UItem.asShadow(AeroConfig.tr(
-            "Jami " + UserConfig.MAX_ACCOUNT_COUNT + " tagacha akkaunt ulash mumkin • Hozir faol: " + active + " ta",
-            "Жами " + UserConfig.MAX_ACCOUNT_COUNT + " тагача аккаунт улаш мумкин • Ҳозир фаол: " + active + " та"
+            "Cheksiz akkaunt ulash mumkin (∞) • Hozir faol: " + active + " ta",
+            "Чексиз аккаунт улаш мумкин (∞) • Ҳозир фаол: " + active + " та"
         )));
-        if (active < UserConfig.MAX_ACCOUNT_COUNT) {
-            items.add(AeroRowCell.Factory.ofNav(500, 0xFF6366F1, R.drawable.msg_groups_create,
-                AeroConfig.tr("Yangi akkaunt qo‘shish", "Янги аккаунт қўшиш"),
-                AeroConfig.tr("Boshqa raqam orqali tizimga kirish", "Бошқа рақам орқали тизимга кириш"),
-                "+", AeroRowCell.BADGE_NONE));
-        }
+        items.add(AeroRowCell.Factory.ofNav(500, 0xFF6366F1, R.drawable.msg_groups_create,
+            AeroConfig.tr("Yangi akkaunt qo‘shish", "Янги аккаунт қўшиш"),
+            AeroConfig.tr("Boshqa raqam orqali tizimga kirish", "Бошқа рақам орқали тизимга кириш"),
+            "+", AeroRowCell.BADGE_NONE));
     }
 
     private void fillChatToggleList(ArrayList<UItem> items, boolean hiddenMode) {
@@ -819,6 +817,15 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     }
 
     private static final GuideEntry[] GUIDE_CARDS = {
+        new GuideEntry(0xFF10B981, R.drawable.msg_groups,
+            "Cheksiz Akkauntlar (∞)",
+            "Чексиз Аккаунтлар (∞)",
+            "Standart holatda doim ochiq (Premium talab qilinmaydi)",
+            "Стандарт ҳолатда доим очиқ (Premium талаб қилинмайди)",
+            "AeroGram ilovasiga istalgancha (5, 10, 20 va undan ko‘p) Telegram akkauntlarini ulashingiz mumkin. Profil menyusi, Sozlamalar yoki «AeroGram Sozlamalari → Barcha akkauntlar → Yangi akkaunt qo‘shish» orqali bemalol qo‘shing va bir bosishda almashtiring.",
+            "AeroGram иловасига исталганча (5, 10, 20 ва ундан кўп) Telegram аккаунтларини улашингиз мумкин. Профил менюси, Созламалар ёки «AeroGram Созламалари → Барча аккаунтлар → Янги аккаунт қўшиш» орқали бемалол қўшинг ва бир босишда алмаштиринг.",
+            "Akkaunt ichidan «Chiqish» (Log out) orqali istalgan akkauntni uzishingiz mumkin.",
+            "Аккаунт ичидан «Чиқиш» (Log out) орқали исталган аккаунтни узишингиз мумкин."),
         new GuideEntry(0xFF0EA5E9, R.drawable.msg_saved,
             "1-martalik Rasm, Video, Golos & Dumaloq video saqlash (?? reply)",
             "1-марталик Расм, Видео, Голос & Думалоқ видео сақлаш (?? reply)",
@@ -926,7 +933,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         badgeBg.setCornerRadius(dp(6));
         badgeBg.setColor(0xFF0284C7);
         TextView badge = new TextView(context);
-        badge.setText("AEROGRAM v1.4.1 • BUILD 1007");
+        badge.setText("AEROGRAM v1.4.2 • BUILD 1008");
         badge.setTypeface(AndroidUtilities.bold());
         badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
         badge.setTextColor(Color.WHITE);
@@ -1012,11 +1019,11 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         items.add(AeroRowCell.Factory.ofNav(203, 0xFF6366F1, R.drawable.msg_share,
             "GitHub Relizlar",
             "https://github.com/Bauntyme/AeroGram/releases",
-            "v1.4.1", AeroRowCell.BADGE_NONE));
+            "v1.4.2", AeroRowCell.BADGE_NONE));
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.4.1 (Build 1007) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
-            "AeroGram v1.4.1 (Build 1007) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
+            "AeroGram v1.4.2 (Build 1008) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
+            "AeroGram v1.4.2 (Build 1008) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
         )));
     }
 
@@ -1197,7 +1204,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             }
         } else if (mode == MODE_ACCOUNTS) {
             if (item.id == 500) {
-                presentFragment(new LoginActivity());
+                presentFragment(new LoginActivity(UserConfig.allocateAccountSlot()));
             } else if (item.id >= 0 && item.id < UserConfig.MAX_ACCOUNT_COUNT && item.id != currentAccount && LaunchActivity.instance != null) {
                 LaunchActivity.instance.switchToAccount(item.id, true);
             }

@@ -179,30 +179,15 @@ public class NotificationsController extends BaseController implements Notificat
         audioManager = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
     }
 
-    private static volatile NotificationsController[] Instance = new NotificationsController[UserConfig.MAX_ACCOUNT_COUNT];
-    private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
-    static {
-        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
-            lockObjects[i] = new Object();
-        }
-    }
+    private static final AccountInstanceMap<NotificationsController> Instance = new AccountInstanceMap<>();
 
     public static NotificationsController getInstance(int num) {
-        NotificationsController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (lockObjects[num]) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new NotificationsController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, NotificationsController::new);
     }
 
     public NotificationsController(int instance) {
         super(instance);
-        notificationId = currentAccount + 1;
+        notificationId = currentAccount < 3 ? (currentAccount + 1) : (Integer.MIN_VALUE + 1000 + currentAccount);
         notificationGroup = "messages" + (currentAccount == 0 ? "" : currentAccount);
         SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
         inChatSoundEnabled = preferences.getBoolean("EnableInChatSound", true);

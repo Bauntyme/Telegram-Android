@@ -43,6 +43,11 @@ public:
     ~ConnectionsManager();
 
     static ConnectionsManager &getInstance(int32_t instanceNum);
+    static void setDefaultDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
+#ifdef ANDROID
+    static JNIEnv *getInstanceJniEnv(int32_t instanceNum);
+    static void setInstanceJniEnv(int32_t instanceNum, JNIEnv *env);
+#endif
     int64_t getCurrentTimeMillis();
     int64_t getCurrentTimeMonotonicMillis();
     int32_t getCurrentTime();
@@ -145,8 +150,8 @@ private:
 
     std::map<uint32_t, Datacenter *> datacenters;
     std::map<int32_t, std::vector<std::int32_t>> quickAckIdToRequestIds;
-    int32_t pingTime;
-    int64_t pingTimeMs;
+    int32_t pingTime = 0;
+    int64_t pingTimeMs = 0;
     bool testBackend = false;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
@@ -180,11 +185,11 @@ private:
     ConnectionState connectionState = ConnectionStateConnecting;
     std::unique_ptr<ByteArray> movingAuthorization;
     std::vector<int64_t> sessionsToDestroy;
-    int32_t lastDestroySessionRequestTime;
+    int32_t lastDestroySessionRequestTime = 0;
     std::map<int32_t, std::vector<int32_t>> requestsByGuids;
     std::map<int32_t, int32_t> guidsByRequests;
     std::map<int64_t, int64_t> resendRequests;
-    Datacenter *deserializingDatacenter;
+    Datacenter *deserializingDatacenter = nullptr;
     uint32_t deserializeDepth = 0;
 
     std::string proxyUser = "";
@@ -196,12 +201,12 @@ private:
     std::vector<std::unique_ptr<ProxyCheckInfo>> proxyCheckQueue;
     std::vector<std::unique_ptr<ProxyCheckInfo>> proxyActiveChecks;
 
-    pthread_t networkThread;
-    pthread_mutex_t mutex;
+    pthread_t networkThread = 0;
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     std::queue<std::function<void()>> pendingTasks;
-    struct epoll_event *epollEvents;
-    timespec timeSpec;
-    timespec timeSpecMonotonic;
+    struct epoll_event *epollEvents = nullptr;
+    timespec timeSpec = {};
+    timespec timeSpecMonotonic = {};
     int32_t timeDifference = 0;
     int64_t lastOutgoingMessageId = 0;
     bool networkAvailable = true;
@@ -211,10 +216,10 @@ private:
     bool lastProtocolUsefullData = false;
     std::vector<ConnectionSocket *> activeConnections;
     std::vector<ConnectionSocket *> activeConnectionsCopy;
-    int epolFd;
-    int eventFd;
+    int epolFd = -1;
+    int eventFd = -1;
     int *pipeFd = nullptr;
-    NativeByteBuffer *networkBuffer;
+    NativeByteBuffer *networkBuffer = nullptr;
 
     requestsList waitingLoginRequests;
     requestsList requestsQueue;
@@ -254,9 +259,9 @@ private:
     std::map<uint32_t, uint32_t> downloadRunningRequestCount;
     std::map<uint32_t, uint32_t> downloadCancelRunningRequestCount;
     std::vector<Datacenter *> unauthorizedDatacenters;
-    NativeByteBuffer *sizeCalculator;
+    NativeByteBuffer *sizeCalculator = nullptr;
 
-    ConnectiosManagerDelegate *delegate;
+    ConnectiosManagerDelegate *delegate = nullptr;
 
     friend class ConnectionSocket;
     friend class ConnectionSession;
@@ -272,7 +277,6 @@ private:
 
 #ifdef ANDROID
 extern JavaVM *javaVm;
-extern JNIEnv *jniEnv[MAX_ACCOUNT_COUNT];
 extern jclass jclass_ByteBuffer;
 extern jmethodID jclass_ByteBuffer_allocateDirect;
 #endif

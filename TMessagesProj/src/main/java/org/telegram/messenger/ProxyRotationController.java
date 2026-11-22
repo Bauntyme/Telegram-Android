@@ -83,17 +83,30 @@ public class ProxyRotationController implements NotificationCenter.NotificationC
         }
     }
 
+    private final java.util.HashSet<Integer> observedAccounts = new java.util.HashSet<>();
+
+    private void attachAccountObserver(int account) {
+        if (observedAccounts.add(account)) {
+            NotificationCenter.getInstance(account).addObserver(this, NotificationCenter.didUpdateConnectionState);
+        }
+    }
+
     private void initInternal() {
-        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
-            NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.didUpdateConnectionState);
+        for (int i = 0; i < UserConfig.getAccountSlotCount(); i++) {
+            attachAccountObserver(i);
         }
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxyCheckDone);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.accountSlotAllocated);
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.proxyCheckDone) {
+        if (id == NotificationCenter.accountSlotAllocated) {
+            if (args != null && args.length > 0 && args[0] instanceof Integer) {
+                attachAccountObserver((Integer) args[0]);
+            }
+        } else if (id == NotificationCenter.proxyCheckDone) {
             if (!SharedConfig.isProxyEnabled() || !SharedConfig.proxyRotationEnabled || SharedConfig.proxyList.size() <= 1 || !isCurrentlyChecking) {
                 return;
             }

@@ -102,17 +102,8 @@ public class BotGuardHelper extends BaseController {
 
 
 
-    private static volatile BotGuardHelper[] Instance = new BotGuardHelper[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<BotGuardHelper> Instance = new AccountInstanceMap<>();
     public static BotGuardHelper getInstance(final int num) {
-        BotGuardHelper localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (BotForumHelper.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new BotGuardHelper(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, BotGuardHelper::new);
     }
 }

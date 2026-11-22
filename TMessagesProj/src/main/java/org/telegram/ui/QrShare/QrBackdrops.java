@@ -5,6 +5,7 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
@@ -26,7 +27,7 @@ public final class QrBackdrops {
 
     private static final String KEY = "qrBackdrops";
 
-    private static final QrBackdrops[] instances = new QrBackdrops[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<QrBackdrops> instances = new AccountInstanceMap<>();
 
     private final int account;
     private @Nullable TLRPC.TL_shareThemeBackdrops backdrops;
@@ -34,10 +35,7 @@ public final class QrBackdrops {
     private final ArrayList<Runnable> callbacks = new ArrayList<>();
 
     public static QrBackdrops get(int account) {
-        if (instances[account] == null) {
-            instances[account] = new QrBackdrops(account);
-        }
-        return instances[account];
+        return instances.getOrCreate(account, QrBackdrops::new);
     }
 
     private QrBackdrops(int account) {

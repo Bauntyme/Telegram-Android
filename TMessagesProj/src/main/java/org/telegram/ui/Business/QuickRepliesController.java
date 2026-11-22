@@ -5,6 +5,7 @@ import android.text.TextUtils;
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLiteDatabase;
 import org.telegram.SQLite.SQLitePreparedStatement;
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.FileLog;
@@ -34,24 +35,9 @@ public class QuickRepliesController {
         return GREETING.equalsIgnoreCase(name) || AWAY.equalsIgnoreCase(name);
     }
 
-    private static volatile QuickRepliesController[] Instance = new QuickRepliesController[UserConfig.MAX_ACCOUNT_COUNT];
-    private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
-    static {
-        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
-            lockObjects[i] = new Object();
-        }
-    }
+    private static final AccountInstanceMap<QuickRepliesController> Instance = new AccountInstanceMap<>();
     public static QuickRepliesController getInstance(int num) {
-        QuickRepliesController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (lockObjects[num]) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new QuickRepliesController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, QuickRepliesController::new);
     }
 
     public final int currentAccount;

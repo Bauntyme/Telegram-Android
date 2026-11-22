@@ -8,18 +8,9 @@ import org.telegram.ui.Components.Paint.PersistColorPalette;
 public class AccountInstance {
 
     private int currentAccount;
-    private static volatile AccountInstance[] Instance = new AccountInstance[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<AccountInstance> Instance = new AccountInstanceMap<>();
     public static AccountInstance getInstance(int num) {
-        AccountInstance localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (AccountInstance.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new AccountInstance(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, AccountInstance::new);
     }
 
     public AccountInstance(int instance) {

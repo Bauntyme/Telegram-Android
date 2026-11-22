@@ -241,19 +241,10 @@ public class DownloadController extends BaseController implements NotificationCe
     public int currentWifiPreset;
     public int currentRoamingPreset;
     
-    private static volatile DownloadController[] Instance = new DownloadController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<DownloadController> Instance = new AccountInstanceMap<>();
 
     public static DownloadController getInstance(int num) {
-        DownloadController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (DownloadController.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new DownloadController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, DownloadController::new);
     }
 
     public DownloadController(int instance) {

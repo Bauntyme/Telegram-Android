@@ -57,25 +57,10 @@ import java.util.HashMap;
 
 public class FactCheckController {
 
-    private static volatile FactCheckController[] Instance = new FactCheckController[UserConfig.MAX_ACCOUNT_COUNT];
-    private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
-    static {
-        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
-            lockObjects[i] = new Object();
-        }
-    }
+    private static final AccountInstanceMap<FactCheckController> Instance = new AccountInstanceMap<>();
 
     public static FactCheckController getInstance(int num) {
-        FactCheckController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (lockObjects[num]) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new FactCheckController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, FactCheckController::new);
     }
 
     public final int currentAccount;

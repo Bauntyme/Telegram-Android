@@ -10,6 +10,7 @@ package org.telegram.messenger;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Base64;
 import android.util.LongSparseArray;
@@ -19,6 +20,7 @@ import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -26,7 +28,9 @@ public class UserConfig extends BaseController {
 
     public static int selectedAccount;
     public final static int MAX_ACCOUNT_DEFAULT_COUNT = 3;
-    public final static int MAX_ACCOUNT_COUNT = 4;
+    public static volatile int MAX_ACCOUNT_COUNT = 4;
+    private static final Object slotsSync = new Object();
+    private static volatile boolean slotsInitialized = false;
 
     private final Object sync = new Object();
     private volatile boolean configLoaded;
@@ -85,24 +89,184 @@ public class UserConfig extends BaseController {
     LongSparseArray<SaveToGallerySettingsHelper.DialogException> groupsSaveGalleryExceptions;
 
 
-    private static volatile UserConfig[] Instance = new UserConfig[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<UserConfig> Instance = new AccountInstanceMap<>();
     public static UserConfig getInstance(int num) {
-        UserConfig localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (UserConfig.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new UserConfig(num);
+        if (num >= MAX_ACCOUNT_COUNT) {
+            ensureSlotCapacity(num);
+        }
+        return Instance.getOrCreate(num, UserConfig::new);
+    }
+
+    public static void initAccountSlots() {
+        synchronized (slotsSync) {
+            int slotCount = Math.max(4, MAX_ACCOUNT_COUNT);
+            Context ctx = ApplicationLoader.applicationContext;
+            if (ctx != null) {
+                try {
+                    SharedPreferences prefs = ctx.getSharedPreferences("mainconfig", Context.MODE_PRIVATE);
+                    slotCount = Math.max(slotCount, prefs.getInt("accountSlotCount", 4));
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                try {
+                    File filesDir = ApplicationLoader.getFilesDirFixed();
+                    if (filesDir != null) {
+                        File[] dirs = filesDir.listFiles();
+                        if (dirs != null) {
+                            for (File d : dirs) {
+                                if (d != null && d.isDirectory()) {
+                                    String name = d.getName();
+                                    if (name.startsWith("account") && name.length() > 7) {
+                                        int idx = parsePositiveSlotIndex(name.substring(7));
+                                        if (idx >= 0) {
+                                            slotCount = Math.max(slotCount, idx + 1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                try {
+                    File prefsDir = new File(ctx.getApplicationInfo().dataDir, "shared_prefs");
+                    if (prefsDir.isDirectory()) {
+                        File[] files = prefsDir.listFiles();
+                        if (files != null) {
+                            for (File f : files) {
+                                if (f != null && f.isFile()) {
+                                    String name = f.getName();
+                                    if (name.startsWith("userconfig") && name.endsWith(".xml") && name.length() > 14) {
+                                        int idx = parsePositiveSlotIndex(name.substring(10, name.length() - 4));
+                                        if (idx >= 0) {
+                                            slotCount = Math.max(slotCount, idx + 1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                try {
+                    SharedPreferences prefs = ctx.getSharedPreferences("mainconfig", Context.MODE_PRIVATE);
+                    if (prefs.getInt("accountSlotCount", 4) < slotCount) {
+                        prefs.edit().putInt("accountSlotCount", slotCount).commit();
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+            }
+            MAX_ACCOUNT_COUNT = slotCount;
+            slotsInitialized = true;
+        }
+    }
+
+    private static int parsePositiveSlotIndex(String s) {
+        if (s == null || s.isEmpty()) {
+            return -1;
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') {
+                return -1;
+            }
+        }
+        try {
+            return Integer.parseInt(s);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    public static void ensureSlotsInitialized() {
+        if (!slotsInitialized && ApplicationLoader.applicationContext != null) {
+            initAccountSlots();
+        }
+    }
+
+    public static int getAccountSlotCount() {
+        ensureSlotsInitialized();
+        return MAX_ACCOUNT_COUNT;
+    }
+
+    private static void ensureSlotCapacity(int slotIndex) {
+        if (slotIndex < 0) {
+            return;
+        }
+        synchronized (slotsSync) {
+            int required = slotIndex + 1;
+            if (required > MAX_ACCOUNT_COUNT) {
+                MAX_ACCOUNT_COUNT = required;
+                try {
+                    if (ApplicationLoader.applicationContext != null) {
+                        ApplicationLoader.applicationContext
+                            .getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
+                            .edit()
+                            .putInt("accountSlotCount", MAX_ACCOUNT_COUNT)
+                            .apply();
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
                 }
             }
         }
-        return localInstance;
+    }
+
+    public static int allocateAccountSlot() {
+        ensureSlotsInitialized();
+        int allocated = -1;
+        boolean newlyAllocated = false;
+        synchronized (slotsSync) {
+            for (int a = 0; a < MAX_ACCOUNT_COUNT; a++) {
+                UserConfig uc = getInstance(a);
+                if (!uc.isConfigLoaded()) {
+                    uc.loadConfig();
+                }
+                if (!uc.isClientActivated()) {
+                    allocated = a;
+                    break;
+                }
+            }
+            if (allocated < 0) {
+                allocated = MAX_ACCOUNT_COUNT;
+                MAX_ACCOUNT_COUNT = allocated + 1;
+                newlyAllocated = true;
+                try {
+                    if (ApplicationLoader.applicationContext != null) {
+                        ApplicationLoader.applicationContext
+                            .getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
+                            .edit()
+                            .putInt("accountSlotCount", MAX_ACCOUNT_COUNT)
+                            .commit();
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+            }
+        }
+        UserConfig uc = getInstance(allocated);
+        if (!uc.isConfigLoaded()) {
+            uc.loadConfig();
+        }
+        if (newlyAllocated) {
+            final int slotFinal = allocated;
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.accountSlotAllocated, slotFinal);
+            } else {
+                AndroidUtilities.runOnUIThread(() -> NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.accountSlotAllocated, slotFinal));
+            }
+        }
+        return allocated;
     }
 
     public static int getActivatedAccountsCount() {
+        ensureSlotsInitialized();
         int count = 0;
         for (int a = 0; a < MAX_ACCOUNT_COUNT; a++) {
-            if (AccountInstance.getInstance(a).getUserConfig().isClientActivated()) {
+            if (getInstance(a).isClientActivated()) {
                 count++;
             }
         }
@@ -114,8 +278,9 @@ public class UserConfig extends BaseController {
     }
 
     public static boolean hasPremiumOnAccounts() {
+        ensureSlotsInitialized();
         for (int a = 0; a < MAX_ACCOUNT_COUNT; a++) {
-            if (AccountInstance.getInstance(a).getUserConfig().isClientActivated() && AccountInstance.getInstance(a).getUserConfig().getUserConfig().isPremium()) {
+            if (getInstance(a).isClientActivated() && getInstance(a).isPremium()) {
                 return true;
             }
         }
@@ -123,7 +288,7 @@ public class UserConfig extends BaseController {
     }
 
     public static int getMaxAccountCount() {
-        return hasPremiumOnAccounts() ? 5 : 3;
+        return Math.max(getAccountSlotCount(), getActivatedAccountsCount() + 1);
     }
 
     public int getNewMessageId() {
@@ -232,7 +397,15 @@ public class UserConfig extends BaseController {
     }
 
     public static boolean isValidAccount(int num) {
-         return num >= 0 && num < UserConfig.MAX_ACCOUNT_COUNT && getInstance(num).isClientActivated();
+        ensureSlotsInitialized();
+        if (num < 0 || num >= MAX_ACCOUNT_COUNT) {
+            return false;
+        }
+        UserConfig uc = getInstance(num);
+        if (!uc.isConfigLoaded()) {
+            uc.loadConfig();
+        }
+        return uc.isClientActivated();
     }
 
     public boolean isClientActivated() {

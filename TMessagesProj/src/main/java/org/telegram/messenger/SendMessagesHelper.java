@@ -957,18 +957,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
     }
 
-    private static volatile SendMessagesHelper[] Instance = new SendMessagesHelper[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<SendMessagesHelper> Instance = new AccountInstanceMap<>();
     public static SendMessagesHelper getInstance(int num) {
-        SendMessagesHelper localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (SendMessagesHelper.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new SendMessagesHelper(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, SendMessagesHelper::new);
     }
 
     public SendMessagesHelper(int instance) {

@@ -40,6 +40,7 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
+import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -1421,8 +1422,11 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
 
         removeObservers();
         if (!isLocation) {
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                GroupCallMessagesController.getInstance(a).unsubscribeFromCallMessages(0, this);
+            for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+                GroupCallMessagesController gcmc = GroupCallMessagesController.getInstanceIfExists(a);
+                if (gcmc != null) {
+                    gcmc.unsubscribeFromCallMessages(0, this);
+                }
             }
         }
 
@@ -1436,7 +1440,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         wasDraw = false;
     }
 
-    private final NotificationCenter.ObserversGroup[] observersGroup = new NotificationCenter.ObserversGroup[UserConfig.MAX_ACCOUNT_COUNT];
+    private final SparseArray<NotificationCenter.ObserversGroup> observersGroup = new SparseArray<>();
     private NotificationCenter.ObserversGroup globalObserversGroup;
 
     private void removeObservers() {
@@ -1444,12 +1448,30 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
             globalObserversGroup.removeAllObservers();
             globalObserversGroup = null;
         }
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (observersGroup[a] != null) {
-                observersGroup[a].removeAllObservers();
-                observersGroup[a] = null;
+        for (int i = 0; i < observersGroup.size(); i++) {
+            NotificationCenter.ObserversGroup group = observersGroup.valueAt(i);
+            if (group != null) {
+                group.removeAllObservers();
             }
         }
+        observersGroup.clear();
+    }
+
+    private void attachAccountObservers(int a) {
+        if (observersGroup.get(a) != null) {
+            return;
+        }
+        observersGroup.put(a, NotificationCenter.getInstance(a)
+            .createObserversGroup(this)
+            .add(NotificationCenter.messagePlayingDidReset)
+            .add(NotificationCenter.messagePlayingPlayStateChanged)
+            .add(NotificationCenter.messagePlayingDidStart)
+            .add(NotificationCenter.groupCallUpdated)
+            .add(NotificationCenter.groupCallTypingsUpdated)
+            .add(NotificationCenter.historyImportProgressChanged)
+            .add(NotificationCenter.liveStoryUpdated)
+            .add(NotificationCenter.messagePlayingProgressDidChanged));
+        GroupCallMessagesController.getInstance(a).subscribeToCallMessages(0, this);
     }
 
 
@@ -1465,18 +1487,8 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                 .add(NotificationCenter.liveLocationsCacheChanged);
             checkLiveLocation(true);
         } else {
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                observersGroup[a] = NotificationCenter.getInstance(a)
-                    .createObserversGroup(this)
-                    .add(NotificationCenter.messagePlayingDidReset)
-                    .add(NotificationCenter.messagePlayingPlayStateChanged)
-                    .add(NotificationCenter.messagePlayingDidStart)
-                    .add(NotificationCenter.groupCallUpdated)
-                    .add(NotificationCenter.groupCallTypingsUpdated)
-                    .add(NotificationCenter.historyImportProgressChanged)
-                    .add(NotificationCenter.liveStoryUpdated)
-                    .add(NotificationCenter.messagePlayingProgressDidChanged);
-                GroupCallMessagesController.getInstance(a).subscribeToCallMessages(0, this);
+            for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+                attachAccountObservers(a);
             }
 
             globalObserversGroup = NotificationCenter.getGlobalInstance()
@@ -1486,7 +1498,8 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                 .add(NotificationCenter.didEndCall)
                 .add(NotificationCenter.webRtcSpeakerAmplitudeEvent)
                 .add(NotificationCenter.webRtcMicAmplitudeEvent)
-                .add(NotificationCenter.groupCallVisibilityChanged);
+                .add(NotificationCenter.groupCallVisibilityChanged)
+                .add(NotificationCenter.accountSlotAllocated);
 
             if (LivePlayer.recording != null) {
                 checkLiveStory(true);
@@ -1538,7 +1551,11 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.liveLocationsChanged) {
+        if (id == NotificationCenter.accountSlotAllocated) {
+            if (!isLocation && args != null && args.length > 0 && args[0] instanceof Integer) {
+                attachAccountObservers((Integer) args[0]);
+            }
+        } else if (id == NotificationCenter.liveLocationsChanged) {
             checkLiveLocation(false);
         } else if (id == NotificationCenter.liveStoryUpdated) {
             checkLiveStory(false);

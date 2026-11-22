@@ -2,6 +2,7 @@ package org.telegram.ui.Stories;
 
 import android.view.View;
 
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.MessagesController;
@@ -22,7 +23,7 @@ import java.util.ArrayList;
 
 public class UserListPoller {
 
-    private static UserListPoller[] istances = new UserListPoller[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<UserListPoller> istances = new AccountInstanceMap<>();
 
     final int currentAccount;
 
@@ -31,10 +32,7 @@ public class UserListPoller {
     }
 
     public static UserListPoller getInstance(int account) {
-        if (istances[account] == null) {
-            istances[account] = new UserListPoller(account);
-        }
-        return istances[account];
+        return istances.getOrCreate(account, UserListPoller::new);
     }
 
     LongSparseLongArray userPollLastTime = new LongSparseLongArray();

@@ -77,19 +77,10 @@ public class LocationController extends BaseController implements NotificationCe
 
     private ILocationServiceProvider.ILocationRequest locationRequest;
 
-    private static volatile LocationController[] Instance = new LocationController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<LocationController> Instance = new AccountInstanceMap<>();
 
     public static LocationController getInstance(int num) {
-        LocationController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (LocationController.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new LocationController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, LocationController::new);
     }
 
     public static class SharingLocationInfo {

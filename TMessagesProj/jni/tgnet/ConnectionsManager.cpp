@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <cinttypes>
+#include <unordered_map>
 #include "ConnectionsManager.h"
 #include "DownloadRequestBudget.h"
 #include "FileLog.h"
@@ -35,10 +36,15 @@
 #include "ProxyCheckInfo.h"
 #include "Handshake.h"
 
+static pthread_mutex_t instancesMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::unordered_map<int32_t, ConnectionsManager *> instancesMap;
+static ConnectiosManagerDelegate *defaultDelegate = nullptr;
+
 #ifdef ANDROID
 #include <jni.h>
 JavaVM *javaVm = nullptr;
-JNIEnv *jniEnv[MAX_ACCOUNT_COUNT];
+static pthread_mutex_t jniEnvMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::unordered_map<int32_t, JNIEnv *> jniEnvMap;
 jclass jclass_ByteBuffer = nullptr;
 jmethodID jclass_ByteBuffer_allocateDirect = nullptr;
 #endif
@@ -138,25 +144,59 @@ ConnectionsManager::~ConnectionsManager() {
 }
 
 ConnectionsManager& ConnectionsManager::getInstance(int32_t instanceNum) {
-    switch (instanceNum) {
-        case 0:
-            static ConnectionsManager instance0(0);
-            return instance0;
-        case 1:
-            static ConnectionsManager instance1(1);
-            return instance1;
-        case 2:
-            static ConnectionsManager instance2(2);
-            return instance2;
-        case 3:
-            static ConnectionsManager instance3(3);
-            return instance3;
-        case 4:
-        default:
-            static ConnectionsManager instance4(4);
-            return instance4;
+    if (instanceNum < 0) {
+        instanceNum = 0;
     }
+    pthread_mutex_lock(&instancesMutex);
+    auto it = instancesMap.find(instanceNum);
+    if (it == instancesMap.end()) {
+        ConnectionsManager *instance = new ConnectionsManager(instanceNum);
+        if (defaultDelegate != nullptr) {
+            instance->setDelegate(defaultDelegate);
+        }
+        instancesMap[instanceNum] = instance;
+        pthread_mutex_unlock(&instancesMutex);
+        return *instance;
+    }
+    ConnectionsManager *existing = it->second;
+    pthread_mutex_unlock(&instancesMutex);
+    return *existing;
 }
+
+void ConnectionsManager::setDefaultDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate) {
+    pthread_mutex_lock(&instancesMutex);
+    defaultDelegate = connectiosManagerDelegate;
+    for (auto &entry : instancesMap) {
+        if (entry.second != nullptr && entry.second->delegate == nullptr) {
+            entry.second->setDelegate(connectiosManagerDelegate);
+        }
+    }
+    pthread_mutex_unlock(&instancesMutex);
+}
+
+#ifdef ANDROID
+void ConnectionsManager::setInstanceJniEnv(int32_t instanceNum, JNIEnv *env) {
+    pthread_mutex_lock(&jniEnvMutex);
+    jniEnvMap[instanceNum] = env;
+    pthread_mutex_unlock(&jniEnvMutex);
+}
+
+JNIEnv *ConnectionsManager::getInstanceJniEnv(int32_t instanceNum) {
+    JNIEnv *env = nullptr;
+    if (javaVm != nullptr) {
+        if (javaVm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_OK && env != nullptr) {
+            return env;
+        }
+    }
+    pthread_mutex_lock(&jniEnvMutex);
+    auto it = jniEnvMap.find(instanceNum);
+    if (it != jniEnvMap.end()) {
+        env = it->second;
+    }
+    pthread_mutex_unlock(&jniEnvMutex);
+    return env;
+}
+#endif
 
 int ConnectionsManager::callEvents(int64_t now) {
     if (!events.empty()) {
@@ -348,7 +388,10 @@ void *ConnectionsManager::ThreadProc(void *data) {
     if (LOGS_ENABLED) DEBUG_D("network thread started");
     auto networkManager = (ConnectionsManager *) (data);
 #ifdef ANDROID
-    javaVm->AttachCurrentThread(&jniEnv[networkManager->instanceNum], nullptr);
+    JNIEnv *threadEnv = nullptr;
+    if (javaVm != nullptr && javaVm->AttachCurrentThread(&threadEnv, nullptr) == JNI_OK) {
+        ConnectionsManager::setInstanceJniEnv(networkManager->instanceNum, threadEnv);
+    }
 #endif
     if (networkManager->currentUserId != 0 && networkManager->pushConnectionEnabled) {
         Datacenter *datacenter = networkManager->getDatacenterWithId(networkManager->currentDatacenterId);

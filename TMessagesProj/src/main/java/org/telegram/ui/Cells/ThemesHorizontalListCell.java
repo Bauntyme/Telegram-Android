@@ -814,22 +814,29 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
         invalidateViews();
     }
 
+    private final android.util.SparseBooleanArray observedAccounts = new android.util.SparseBooleanArray();
+
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.fileLoaded);
-            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.fileLoadFailed);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            if (!observedAccounts.get(a)) {
+                observedAccounts.put(a, true);
+                NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.fileLoaded);
+                NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.fileLoadFailed);
+            }
         }
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+        for (int i = 0; i < observedAccounts.size(); i++) {
+            int a = observedAccounts.keyAt(i);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.fileLoaded);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.fileLoadFailed);
         }
+        observedAccounts.clear();
     }
 
     @Override

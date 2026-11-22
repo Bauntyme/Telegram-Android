@@ -239,20 +239,10 @@ public class ChatThemeController extends BaseController {
     }
 
 
-    private static final ChatThemeController[] instances = new ChatThemeController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<ChatThemeController> instances = new AccountInstanceMap<>();
 
     public static ChatThemeController getInstance(int accountNum) {
-        ChatThemeController local = instances[accountNum];
-        if (local == null) {
-            synchronized (ChatThemeController.class) {
-                local = instances[accountNum];
-                if (local == null) {
-                    local = new ChatThemeController(accountNum);
-                    instances[accountNum] = local;
-                }
-            }
-        }
-        return local;
+        return instances.getOrCreate(accountNum, ChatThemeController::new);
     }
 
 

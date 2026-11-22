@@ -1579,17 +1579,15 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         fileBuffer = ByteBuffer.allocateDirect(1920);
 
         AndroidUtilities.runOnUIThread(() -> {
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.fileLoaded);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.httpFileDidLoad);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.didReceiveNewMessages);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.messagesDeleted);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.removeAllMessagesFromDialog);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.musicDidLoad);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.mediaDidLoad);
-                NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.musicListLoaded);
-                NotificationCenter.getGlobalInstance().addObserver(MediaController.this, NotificationCenter.playerDidStartPlaying);
+            for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+                attachAccountObservers(a);
             }
+            NotificationCenter.getGlobalInstance().addObserver(MediaController.this, NotificationCenter.playerDidStartPlaying);
+            NotificationCenter.getGlobalInstance().addObserver((id, account, args) -> {
+                if (id == NotificationCenter.accountSlotAllocated && args != null && args.length > 0 && args[0] instanceof Integer) {
+                    attachAccountObservers((Integer) args[0]);
+                }
+            }, NotificationCenter.accountSlotAllocated);
         });
 
         mediaProjections = new String[]{
@@ -1623,6 +1621,23 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         } catch (Exception e) {
             FileLog.e(e);
         }
+    }
+
+    private final android.util.SparseBooleanArray observedAccounts = new android.util.SparseBooleanArray();
+
+    private void attachAccountObservers(int a) {
+        if (observedAccounts.get(a)) {
+            return;
+        }
+        observedAccounts.put(a, true);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.fileLoaded);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.httpFileDidLoad);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.didReceiveNewMessages);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.messagesDeleted);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.removeAllMessagesFromDialog);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.musicDidLoad);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.mediaDidLoad);
+        NotificationCenter.getInstance(a).addObserver(MediaController.this, NotificationCenter.musicListLoaded);
     }
 
     @Override

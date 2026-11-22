@@ -18,13 +18,23 @@ import androidx.core.app.NotificationManagerCompat;
 public class ImportingService extends Service implements NotificationCenter.NotificationCenterDelegate {
 
     private NotificationCompat.Builder builder;
+    private final android.util.SparseBooleanArray observedAccounts = new android.util.SparseBooleanArray();
+
+    private void attachAccountObservers(int a) {
+        if (observedAccounts.get(a)) {
+            return;
+        }
+        observedAccounts.put(a, true);
+        NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.historyImportProgressChanged);
+        NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.stickersImportProgressChanged);
+    }
 
     public ImportingService() {
         super();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.historyImportProgressChanged);
-            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.stickersImportProgressChanged);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            attachAccountObservers(a);
         }
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.accountSlotAllocated);
     }
 
     public IBinder onBind(Intent arg2) {
@@ -39,10 +49,13 @@ public class ImportingService extends Service implements NotificationCenter.Noti
 
         }
         NotificationManagerCompat.from(ApplicationLoader.applicationContext).cancel(5);
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.accountSlotAllocated);
+        for (int i = 0; i < observedAccounts.size(); i++) {
+            int a = observedAccounts.keyAt(i);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.historyImportProgressChanged);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.stickersImportProgressChanged);
         }
+        observedAccounts.clear();
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("destroy import service");
         }
@@ -50,6 +63,12 @@ public class ImportingService extends Service implements NotificationCenter.Noti
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.accountSlotAllocated) {
+            if (args != null && args.length > 0 && args[0] instanceof Integer) {
+                attachAccountObservers((Integer) args[0]);
+            }
+            return;
+        }
         if (id == NotificationCenter.historyImportProgressChanged || id == NotificationCenter.stickersImportProgressChanged) {
             if (!hasImportingStickers() && !hasImportingStickers()) {
                 stopSelf();

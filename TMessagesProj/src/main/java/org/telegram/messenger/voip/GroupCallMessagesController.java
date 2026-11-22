@@ -5,6 +5,7 @@ import android.util.LongSparseArray;
 import androidx.annotation.Nullable;
 
 import org.json.JSONObject;
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BaseController;
 import org.telegram.messenger.DialogObject;
@@ -313,19 +314,14 @@ public class GroupCallMessagesController extends BaseController {
 
     /* * */
 
-    private static volatile GroupCallMessagesController[] Instance = new GroupCallMessagesController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<GroupCallMessagesController> Instance = new AccountInstanceMap<>();
 
     public static GroupCallMessagesController getInstance(int num) {
-        GroupCallMessagesController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (GroupCallMessagesController.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new GroupCallMessagesController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, GroupCallMessagesController::new);
+    }
+
+    public static GroupCallMessagesController getInstanceIfExists(int num) {
+        return Instance.getIfExists(num);
     }
 
     private GroupCallMessagesController(int accountId) {

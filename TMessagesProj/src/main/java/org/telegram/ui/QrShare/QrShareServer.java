@@ -6,6 +6,7 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
@@ -502,14 +503,10 @@ final class QrShareServer implements NotificationCenter.NotificationCenterDelega
     /** A full that left the server just before the save may still come with the old theme this long after it. */
     private static final long LOCAL_THEME_HOLD = 10_000;
 
-    @SuppressWarnings("unchecked")
-    private static final android.util.LongSparseArray<LocalTheme>[] localThemes = new android.util.LongSparseArray[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<android.util.LongSparseArray<LocalTheme>> localThemes = new AccountInstanceMap<>();
 
     private static android.util.LongSparseArray<LocalTheme> localThemes(int account) {
-        if (localThemes[account] == null) {
-            localThemes[account] = new android.util.LongSparseArray<>();
-        }
-        return localThemes[account];
+        return localThemes.getOrCreate(account, a -> new android.util.LongSparseArray<>());
     }
 
     private @Nullable TLRPC.ShareTheme loadedTheme;

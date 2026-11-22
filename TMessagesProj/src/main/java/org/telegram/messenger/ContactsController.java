@@ -247,18 +247,9 @@ public class ContactsController extends BaseController {
 
     private int completedRequestsCount;
     
-    private static volatile ContactsController[] Instance = new ContactsController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<ContactsController> Instance = new AccountInstanceMap<>();
     public static ContactsController getInstance(int num) {
-        ContactsController localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (ContactsController.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new ContactsController(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, ContactsController::new);
     }
 
     public ContactsController(int instance) {

@@ -5,6 +5,7 @@ import android.util.SparseIntArray;
 import androidx.annotation.Nullable;
 import androidx.collection.LongSparseArray;
 
+import org.telegram.messenger.AccountInstanceMap;
 import org.telegram.messenger.BaseController;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.MessageObject;
@@ -472,17 +473,8 @@ public class EphemeralMessagesHelper extends BaseController {
         super(currentAccount);
     }
 
-    private static volatile EphemeralMessagesHelper[] Instance = new EphemeralMessagesHelper[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<EphemeralMessagesHelper> Instance = new AccountInstanceMap<>();
     public static EphemeralMessagesHelper getInstance(final int num) {
-        EphemeralMessagesHelper localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (EphemeralMessagesHelper.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new EphemeralMessagesHelper(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, EphemeralMessagesHelper::new);
     }
 }

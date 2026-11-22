@@ -194,6 +194,7 @@ public class ApplicationLoader extends Application {
         }
         applicationInited = true;
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
+        UserConfig.initAccountSlots();
 
         try {
             LocaleController.getInstance(); //TODO improve
@@ -213,9 +214,11 @@ public class ApplicationLoader extends Application {
                     }
 
                     boolean isSlow = isConnectionSlow();
-                    for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                        ConnectionsManager.getInstance(a).checkConnection();
-                        FileLoader.getInstance(a).onNetworkChanged(isSlow);
+                    for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+                        if (a == 0 || UserConfig.getInstance(a).isClientActivated() || ConnectionsManager.getInstanceIfExists(a) != null) {
+                            ConnectionsManager.getInstance(a).checkConnection();
+                            FileLoader.getInstance(a).onNetworkChanged(isSlow);
+                        }
                     }
                 }
             };
@@ -251,18 +254,21 @@ public class ApplicationLoader extends Application {
         AeroConfig.init(applicationContext);
         AeroDeletedStore.init(applicationContext);
         AeroEditHistoryStore.init(applicationContext);
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
-            UserConfig.getInstance(a).loadConfig();
-            MessagesController.getInstance(a);
-            if (a == 0) {
-                SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
-            } else {
-                ConnectionsManager.getInstance(a);
-            }
-            TLRPC.User user = UserConfig.getInstance(a).getCurrentUser();
-            if (user != null) {
-                MessagesController.getInstance(a).putUser(user, true);
-                SendMessagesHelper.getInstance(a).checkUnsentMessages();
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            UserConfig uc = UserConfig.getInstance(a);
+            uc.loadConfig();
+            if (a == 0 || uc.isClientActivated()) {
+                MessagesController.getInstance(a);
+                if (a == 0) {
+                    SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
+                } else {
+                    ConnectionsManager.getInstance(a);
+                }
+                TLRPC.User user = uc.getCurrentUser();
+                if (user != null) {
+                    MessagesController.getInstance(a).putUser(user, true);
+                    SendMessagesHelper.getInstance(a).checkUnsentMessages();
+                }
             }
         }
 
@@ -273,9 +279,11 @@ public class ApplicationLoader extends Application {
         }
 
         MediaController.getInstance();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
-            ContactsController.getInstance(a).checkAppAccount();
-            DownloadController.getInstance(a);
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); a++) {
+            if (a == 0 || UserConfig.getInstance(a).isClientActivated()) {
+                ContactsController.getInstance(a).checkAppAccount();
+                DownloadController.getInstance(a);
+            }
         }
         BillingController.getInstance().startConnection();
         // HTML widgets: the isolated engine's process up front, after the app's own start, so that a widget's first

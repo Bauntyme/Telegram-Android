@@ -11,20 +11,10 @@ import org.telegram.tgnet.tl.TL_update;
 
 public class MemberRequestsController extends BaseController {
 
-    private static final MemberRequestsController[] instances = new MemberRequestsController[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<MemberRequestsController> instances = new AccountInstanceMap<>();
 
     public static MemberRequestsController getInstance(int accountNum) {
-        MemberRequestsController local = instances[accountNum];
-        if (local == null) {
-            synchronized (MemberRequestsController.class) {
-                local = instances[accountNum];
-                if (local == null) {
-                    local = new MemberRequestsController(accountNum);
-                    instances[accountNum] = local;
-                }
-            }
-        }
-        return local;
+        return instances.getOrCreate(accountNum, MemberRequestsController::new);
     }
 
     private final LongSparseArray<TLRPC.TL_messages_chatInviteImporters> firstImportersCache = new LongSparseArray<>();

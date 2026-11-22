@@ -228,8 +228,8 @@ public class AeroSettingsActivity extends UniversalFragment {
 
         addNavIfMatches(items, ID_ABOUT, 0xFF0284C7, R.drawable.msg_info,
             "AeroGram haqida", "AeroGram ҳақида",
-            "Ilova versiyasi (v1.4.1), statistika va rasmiy havolalar", "Илова версияси (v1.4.1), статистика ва расмий ҳаволалар",
-            "v1.4.1", AeroRowCell.BADGE_NONE);
+            "Ilova versiyasi (v1.4.2), statistika va rasmiy havolalar", "Илова версияси (v1.4.2), статистика ва расмий ҳаволалар",
+            "v1.4.2", AeroRowCell.BADGE_NONE);
         addNavIfMatches(items, ID_GUIDE, 0xFF0EA5E9, R.drawable.msg_help,
             "AeroGram Qo‘llanmasi", "AeroGram Қўлланмаси",
             "Barcha funksiyalarni yoqish, ishlatish va o‘chirish yo‘riqnomasi", "Барча функцияларни ёқиш, ишлатиш ва ўчириш йўриқномаси",
@@ -240,9 +240,9 @@ public class AeroSettingsActivity extends UniversalFragment {
         items.add(UItem.asHeader(AeroConfig.tr("Akkauntlar", "Аккаунтлар")));
         addNavIfMatches(items, ID_ACCOUNTS, 0xFF10B981, R.drawable.msg_groups,
             "Barcha akkauntlar", "Барча аккаунтлар",
-            "Faol: " + activeAccounts + " ta • Maksimal " + UserConfig.MAX_ACCOUNT_COUNT + " tagacha",
-            "Фаол: " + activeAccounts + " та • Максимал " + UserConfig.MAX_ACCOUNT_COUNT + " тагача",
-            activeAccounts + " / " + UserConfig.MAX_ACCOUNT_COUNT, AeroRowCell.BADGE_NONE);
+            "Faol: " + activeAccounts + " ta • Cheksiz akkaunt ulash mumkin (∞)",
+            "Фаол: " + activeAccounts + " та • Чексиз аккаунт улаш мумкин (∞)",
+            activeAccounts + " / ∞", AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(null));
 
@@ -541,8 +541,8 @@ public class AeroSettingsActivity extends UniversalFragment {
             "", AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.4.1 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
-            "AeroGram v1.4.1 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
+            "AeroGram v1.4.2 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
+            "AeroGram v1.4.2 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
         )));
     }
 

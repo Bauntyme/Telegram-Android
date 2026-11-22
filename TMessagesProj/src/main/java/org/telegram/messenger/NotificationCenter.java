@@ -385,6 +385,7 @@ public class NotificationCenter {
     public static final int webBrowserSettingsUpdate = totalEvents++;
     public static final int communityPendingRequestsUpdate = totalEvents++;
     public static final int communitySwitchedCollapsed = totalEvents++;
+    public static final int accountSlotAllocated = totalEvents++;
 
     public static boolean alreadyLogged;
 
@@ -425,21 +426,12 @@ public class NotificationCenter {
 
     private int currentAccount;
     private int currentHeavyOperationFlags;
-    private static volatile NotificationCenter[] Instance = new NotificationCenter[UserConfig.MAX_ACCOUNT_COUNT];
+    private static final AccountInstanceMap<NotificationCenter> Instance = new AccountInstanceMap<>();
     private static volatile NotificationCenter globalInstance;
 
     @UiThread
     public static NotificationCenter getInstance(int num) {
-        NotificationCenter localInstance = Instance[num];
-        if (localInstance == null) {
-            synchronized (NotificationCenter.class) {
-                localInstance = Instance[num];
-                if (localInstance == null) {
-                    Instance[num] = localInstance = new NotificationCenter(num);
-                }
-            }
-        }
-        return localInstance;
+        return Instance.getOrCreate(num, NotificationCenter::new);
     }
 
     @UiThread

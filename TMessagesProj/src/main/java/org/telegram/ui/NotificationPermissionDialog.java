@@ -48,6 +48,18 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
     private RLottieImageView rLottieImageView;
     private Utilities.Callback<Boolean> whenGranted;
 
+    private final android.util.SparseBooleanArray observedAccounts = new android.util.SparseBooleanArray();
+
+    private void attachAccountObservers(int a) {
+        if (observedAccounts.get(a)) {
+            return;
+        }
+        observedAccounts.put(a, true);
+        try {
+            NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.updateInterfaces);
+        } catch (Exception ignore) {}
+    }
+
     public NotificationPermissionDialog(Context context, boolean settings, Utilities.Callback<Boolean> whenGranted) {
         super(context, false);
         this.whenGranted = whenGranted;
@@ -112,10 +124,8 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
         });
         linearLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 14, 14, 14, 10));
 
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; ++a) {
-            try {
-                NotificationCenter.getInstance(a).addWeakObserver(this, NotificationCenter.updateInterfaces);
-            } catch (Exception ignore) {}
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); ++a) {
+            attachAccountObservers(a);
         }
     }
 
@@ -131,7 +141,10 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
 
     public void updateCounter() {
         int counter = 0;
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; ++a) {
+        for (int a = 0; a < UserConfig.getAccountSlotCount(); ++a) {
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             MessagesStorage messagesStorage = MessagesStorage.getInstance(a);
             if (messagesStorage != null) {
                 counter += messagesStorage.getMainUnreadCount();
@@ -161,11 +174,13 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
             whenGranted = null;
             askLater();
         }
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; ++a) {
+        for (int i = 0; i < observedAccounts.size(); ++i) {
+            int a = observedAccounts.keyAt(i);
             try {
                 NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.updateInterfaces);
             } catch (Exception ignore) {}
         }
+        observedAccounts.clear();
     }
 
     private static class CounterView extends View implements Theme.Colorable {
