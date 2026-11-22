@@ -2,25 +2,14 @@ package org.telegram.ui;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
-import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
-import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AeroDeletedStore;
 import org.telegram.messenger.AeroEditHistoryStore;
-import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -30,8 +19,6 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
-import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
@@ -45,12 +32,9 @@ public class AeroSettingsActivity extends UniversalFragment {
     private static final int MENU_SCRIPT = 2;
     private static final int MENU_SHARE = 3;
 
-    // Header & Quick Hubs
-    private static final int ID_HERO_CARD = 1;
+    // Header & Accounts
     private static final int ID_ABOUT = 2;
     private static final int ID_ACCOUNTS = 3;
-    private static final int ID_BOTS = 4;
-    private static final int ID_ANALYTICS = 5;
 
     // 1. Privacy & Ghost Mode
     private static final int ID_GHOST_MASTER = 10;
@@ -69,20 +53,16 @@ public class AeroSettingsActivity extends UniversalFragment {
     private static final int ID_SET_PIN = 23;
 
     // 2. Translate & Voice-to-Text
-    private static final int ID_AUTO_TRANSLATE = 30;
+    private static final int ID_AUTO_TRANSLATE_PAGE = 30;
     private static final int ID_TRANSLATE_LANG = 31;
-    private static final int ID_AUTO_TRANSLATE_OUT = 32;
-    private static final int ID_ASK_TRANSLATE_SEND = 33;
-    private static final int ID_TRANSLATE_WHOLE_CHAT = 34;
     private static final int ID_VOICE_TO_TEXT = 35;
     private static final int ID_VOICE_LANG = 36;
     private static final int ID_AUTO_TRANSLATE_VOICE = 37;
 
     // 3. Messages & Sending
     private static final int ID_TEXT_STYLE = 40;
-    private static final int ID_NEW_ALPHABET = 41;
-    private static final int ID_POSTFIX_ENABLE = 42;
-    private static final int ID_POSTFIX_TEXT = 43;
+    private static final int ID_NEW_ALPHABET_PAGE = 41;
+    private static final int ID_POSTFIX_PAGE = 42;
     private static final int ID_HEART_EFFECT = 44;
     private static final int ID_AUTO_STICKER = 45;
     private static final int ID_FWD_NO_AUTHOR = 46;
@@ -163,7 +143,7 @@ public class AeroSettingsActivity extends UniversalFragment {
                 reloadList();
             }
         });
-        searchItem.setSearchFieldHint(AeroConfig.tr("Sozlamalarni qidirish...", "Созламаларни қидириш..."));
+        searchItem.setSearchFieldHint(AeroConfig.tr("Qidirish...", "Қидириш..."));
 
         scriptItem = menu.addItem(MENU_SCRIPT, R.drawable.msg_translate);
         scriptItem.setContentDescription(AeroConfig.tr("Lotin / Kirill", "Лотин / Кирилл"));
@@ -204,7 +184,7 @@ public class AeroSettingsActivity extends UniversalFragment {
 
     private void reloadList() {
         if (listView != null && listView.adapter != null) {
-            listView.adapter.update(true);
+            listView.adapter.update(false);
         }
     }
 
@@ -233,55 +213,8 @@ public class AeroSettingsActivity extends UniversalFragment {
         }
     }
 
-    private View createHeroBanner(Context context) {
-        LinearLayout wrap = new LinearLayout(context);
-        wrap.setOrientation(LinearLayout.HORIZONTAL);
-        wrap.setGravity(Gravity.CENTER_VERTICAL);
-        wrap.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(14), AndroidUtilities.dp(16), AndroidUtilities.dp(14));
-
-        GradientDrawable badgeBg = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF38BDF8, 0xFF0284C7, 0xFF1E3A8A}
-        );
-        badgeBg.setCornerRadius(AndroidUtilities.dp(15));
-
-        FrameLayout logoBox = new FrameLayout(context);
-        logoBox.setBackground(badgeBg);
-        ImageView icon = new ImageView(context);
-        icon.setImageResource(R.drawable.ic_aerogram_monochrome);
-        icon.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        logoBox.addView(icon, LayoutHelper.createFrame(30, 30, Gravity.CENTER));
-        wrap.addView(logoBox, LayoutHelper.createLinear(52, 52, Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
-
-        LinearLayout col = new LinearLayout(context);
-        col.setOrientation(LinearLayout.VERTICAL);
-
-        TextView title = new TextView(context);
-        title.setText("AeroGram • Concept A v1.2.0");
-        title.setTypeface(AndroidUtilities.bold());
-        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
-        title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
-        col.addView(title);
-
-        TextView sub = new TextView(context);
-        sub.setText(AeroConfig.tr(
-            "Ghost, Anti-Delete, Tahrirlar tarixi, STT, Avto-tarjima va 6 xil Concept A ikonkalari",
-            "Ghost, Anti-Delete, Таҳрирлар тарихи, STT, Авто-таржима ва 6 хил Concept A иконкалари"
-        ));
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.5f);
-        sub.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, getResourceProvider()));
-        col.addView(sub, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 3, 0, 0));
-
-        wrap.addView(col, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
-        return wrap;
-    }
-
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        if (getParentActivity() != null && !searching) {
-            items.add(UItem.asCustom(ID_HERO_CARD, createHeroBanner(getParentActivity())));
-        }
-
         int activeAccounts = 0;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
@@ -290,37 +223,30 @@ public class AeroSettingsActivity extends UniversalFragment {
         }
 
         addNavIfMatches(items, ID_ABOUT, 0xFF0284C7, R.drawable.msg_info,
-            "AeroGram haqida (To‘liq qo‘llanma)", "AeroGram ҳақида (Тўлиқ қўлланма)",
-            "Har bir funksiya qanday ishlashi, yoqish va o‘chirish haqida", "Ҳар бир функция қандай ишлаши, ёқиш ва ўчириш ҳақида",
-            "", AeroRowCell.BADGE_AERO);
-
-        addNavIfMatches(items, ID_ACCOUNTS, 0xFF10B981, R.drawable.msg_groups,
-            "Barcha akkauntlar", "Барча аккаунтлар",
-            "Jami: " + UserConfig.MAX_ACCOUNT_COUNT + " tagacha • " + activeAccounts + " ta faol",
-            "Жами: " + UserConfig.MAX_ACCOUNT_COUNT + " тагача • " + activeAccounts + " та фаол",
-            activeAccounts + " ta", AeroRowCell.BADGE_NONE);
-
-        addNavIfMatches(items, ID_BOTS, 0xFF8B5CF6, R.drawable.msg_bots,
-            "AeroGram Botlari", "AeroGram Ботлари",
-            "Video, musiqa, PDF, QR va AI botlar katalogi", "Видео, мусиқа, PDF, QR ва AI ботлаp каталоги",
-            "", AeroRowCell.BADGE_NEW);
-
-        addNavIfMatches(items, ID_ANALYTICS, 0xFF0EA5E9, R.drawable.msg_stats,
-            "AeroGram Analitika", "AeroGram Аналитика",
-            "Foydalanuvchilar, relizlar va faol akkauntlar", "Фойдаланувчилар, релизлар ва фаол аккаунтлар",
+            "AeroGram haqida", "AeroGram ҳақида",
+            "Har bir funksiyani yoqish, ishlatish va o‘chirish qo‘llanmasi", "Ҳар бир функцияни ёқиш, ишлатиш ва ўчириш қўлланмаси",
             "", AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(null));
 
-        // 1. Privacy & Ghost Mode
-        items.add(UItem.asHeader(AeroConfig.tr("Maxfiylik, Ghost va Himoya", "Махфийлик, Ghost ва Ҳимоя")));
+        items.add(UItem.asHeader(AeroConfig.tr("Akkauntlar", "Аккаунтлар")));
+        addNavIfMatches(items, ID_ACCOUNTS, 0xFF10B981, R.drawable.msg_groups,
+            "Barcha akkauntlar", "Барча аккаунтлар",
+            "Faol: " + activeAccounts + " ta • Maksimal " + UserConfig.MAX_ACCOUNT_COUNT + " tagacha",
+            "Фаол: " + activeAccounts + " та • Максимал " + UserConfig.MAX_ACCOUNT_COUNT + " тагача",
+            activeAccounts + " / " + UserConfig.MAX_ACCOUNT_COUNT, AeroRowCell.BADGE_NONE);
+
+        items.add(UItem.asShadow(null));
+
+        // 1. Ghost Mode
+        items.add(UItem.asHeader(AeroConfig.tr("Ghost rejimi", "Ghost режими")));
         addSwitchIfMatches(items, ID_GHOST_MASTER, 0xFF6366F1, R.drawable.msg_stealth_locked,
-            "Barcha Ghost funksiyalarini yoqish", "Барча Ghost функцияларини ёқиш",
+            "Barcha Ghost funksiyalari", "Барча Ghost функциялари",
             "O‘qish, onlayn, yozish va story ko‘rishlarini birga yashiradi", "Ўқиш, онлайн, ёзиш ва story кўришларини бирга яширади",
             AeroConfig.isAnyGhostActive(), AeroRowCell.BADGE_AERO);
         addSwitchIfMatches(items, ID_GHOST_DONT_READ, 0xFF4F46E5, R.drawable.msg_views,
             "O‘qilganligini yashirish", "Ўқилганлигини яшириш",
-            "Xabarlarni o‘qiganda ikki belgi (check) ketmaydi", "Хабарларни ўқиганда икки белги (check) кетмайди",
+            "Xabarlarni o‘qiganda ikki ko‘k belgi ketmaydi", "Хабарларни ўқиганда икки кўк белги кетмайди",
             AeroConfig.ghostDontReadMessages, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_GHOST_READ_ON_INTERACT, 0xFF818CF8, R.drawable.menu_reply,
             "Yozganda o‘qilgan qilish", "Ёзганда ўқилган қилиш",
@@ -328,23 +254,28 @@ public class AeroSettingsActivity extends UniversalFragment {
             AeroConfig.ghostReadOnInteract, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_GHOST_OFFLINE, 0xFF4338CA, R.drawable.msg_stealth_25min,
             "Onlayn holatini yashirish", "Онлайн ҳолатини яшириш",
-            "Ilova ochiq bo‘lsa ham oxirgi kirish vaqti ko‘rinmaydi", "Илова очиқ бўлса ҳам охирги кириш вақти кўринмайди",
+            "Ilova ochiq bo‘lsa ham oxirgi kirish vaqti va Onlayn ko‘rinmaydi", "Илова очиқ бўлса ҳам охирги кириш вақти ва Онлайн кўринмайди",
             AeroConfig.ghostStayOffline, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_GHOST_TYPING, 0xFF7C3AED, R.drawable.msg_text_check,
             "Yozish va ovoz yozish holatini yashirish", "Ёзиш ва овоз ёзиш ҳолатини яшириш",
-            "Suҳbatdoshga «yozmoqda...» statusi bormaydi", "Суҳбатдошга «ёзмоқда...» статуси бормайди",
+            "Suhbatdoshga «yozmoqda...» statusi yuborilmaydi", "Суҳбатдошга «ёзмоқда...» статуси юборилмайди",
             AeroConfig.ghostDontSendTyping, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_GHOST_STORY, 0xFF9333EA, R.drawable.msg_stories_views,
             "Hikoya (Story) ko‘rishlarini yashirish", "Ҳикоя (Story) кўришларини яшириш",
             "Story ko‘rganingiz muallifga bildirilmaydi", "Story кўрганингиз муаллифга билдирилмайди",
             AeroConfig.ghostHideStoryViews, AeroRowCell.BADGE_NONE);
+
+        items.add(UItem.asShadow(null));
+
+        // 2. Xabarlar tarixi va Himoya
+        items.add(UItem.asHeader(AeroConfig.tr("Xabarlar tarixi va Himoya", "Хабарлар тарихи ва Ҳимоя")));
         addSwitchIfMatches(items, ID_SAVE_DELETED, 0xFFEF4444, R.drawable.msg_delete,
             "O‘chirilgan xabarlarni saqlash", "Ўчирилган хабарларни сақлаш",
-            "Darhol «O‘chirilgan» deb belgilaydi, qayta yuklashda va mediada ham saqlanadi", "Дарҳол «Ўчирилган» деб белгилайди, қайта юклашда ва медиада ҳам сақланади",
+            "Suhbatdosh o‘chirgan xabar va mediani chatda saqlaydi (o‘zingizniki 1 bosishda o‘chadi)", "Суҳбатдош ўчирган хабар ва медиани чатда сақлайди (ўзингизники 1 босишда ўчади)",
             AeroConfig.saveDeletedMessages, AeroRowCell.BADGE_NEW);
         addSwitchIfMatches(items, ID_EDIT_HISTORY, 0xFFF97316, R.drawable.msg_recent,
             "Tahrirlar tarixini saqlash", "Таҳрирлар тарихини сақлаш",
-            "Xabar ichida avval Eski, pastida Yangi matnni va to‘liq tarixni ko‘rsatadi", "Хабар ичида аввал Эски, пастида Янги матнни ва тўлиқ тарихни кўрсатади",
+            "Avval Eski matn, pastida Yangi matn va barcha tahrir versiyalari", "Аввал Эски матн, пастида Янги матн ва барча таҳрир версиялари",
             AeroConfig.saveEditHistory, AeroRowCell.BADGE_NEW);
         addSwitchIfMatches(items, ID_SCREENSHOT_PROTECT, 0xFFDC2626, R.drawable.passcode_check,
             "Skreenshot va ekran yozishdan himoya", "Скриншот ва экран ёзишдан ҳимоя",
@@ -377,62 +308,33 @@ public class AeroSettingsActivity extends UniversalFragment {
 
         items.add(UItem.asShadow(null));
 
-        // 2. Translate & Voice-to-Text
-        items.add(UItem.asHeader(AeroConfig.tr("Tarjima va Ovoz → Matn (STT)", "Таржима ва Овоз → Матн (STT)")));
-        addSwitchIfMatches(items, ID_AUTO_TRANSLATE, 0xFF0284C7, R.drawable.msg_translate,
-            "Avtomatik chat tarjimasi", "Автоматик чат таржимаси",
-            "Xorijiy tildagi xabarlarni avtomatik tarjima qiladi", "Хорижий тилдаги хабарларни автоматик таржима қилади",
-            AeroConfig.autoTranslate, AeroRowCell.BADGE_NEW);
-        addNavIfMatches(items, ID_TRANSLATE_LANG, 0xFF0EA5E9, R.drawable.msg_link,
-            "Tarjima maqsad tili", "Таржима мақсад тили",
-            "Kiruvchi va chiquvchi tarjimalar uchun asosiy til", "Кирувчи ва чиқувчи таржималар учун асосий тил",
-            AeroConfig.translateTargetLang.toUpperCase(Locale.US), AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_AUTO_TRANSLATE_OUT, 0xFF0369A1, R.drawable.msg_forward,
-            "Yuborilayotgan xabarlarni avto-tarjima", "Юборилаётган хабарларни авто-таржима",
-            "Yuborishdan oldin xabaringizni tanlangan tilga o‘giradi", "Юборишдан олдин хабарингизни танланган тилга ўгиради",
-            AeroConfig.autoTranslateOutgoing, AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_ASK_TRANSLATE_SEND, 0xFF0891B2, R.drawable.msg_text_outlined,
-            "Yuborishda tarjimani so‘rash", "Юборишда таржимани сўраш",
-            "Yuborish tugmasini bosganda tarjima oynasini ko‘rsatadi", "Юбориш тугмасини босганда таржима ойнасини кўрсатади",
-            AeroConfig.askBeforeTranslateSend, AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_TRANSLATE_WHOLE_CHAT, 0xFF06B6D4, R.drawable.msg_translate,
-            "Butun chatni tarjima qilish", "Бутун чатни таржима қилиш",
-            "Chat menyusi va panelida to‘liq tarjimani ochadi", "Чат менюси ва панелида тўлиқ таржимани очади",
-            AeroConfig.translateWholeChat, AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_VOICE_TO_TEXT, 0xFF2563EB, R.drawable.msg_voicechat,
-            "Ovozli xabarlarni matnga aylantirish (STT)", "Овозли хабарларни матнга айлантириш (STT)",
-            "Ovozli xabarlar ostida matn (transkripsiya) tugmasini yoqadi", "Овозли хабарлар остида матн (транскрипция) тугмасини ёқади",
-            AeroConfig.voiceToTextEnabled, AeroRowCell.BADGE_NEW);
-        addNavIfMatches(items, ID_VOICE_LANG, 0xFF1D4ED8, R.drawable.msg_voicechat2,
-            "Ovoz → Matn (STT) tili", "Овоз → Матн (STT) тили",
-            "Transkripsiya uchun afzal til", "Транскрипция учун афзал тил",
-            AeroConfig.voiceToTextLang.toUpperCase(Locale.US), AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_AUTO_TRANSLATE_VOICE, 0xFF3B82F6, R.drawable.msg_translate,
-            "Ovoz matnini avto-tarjima qilish", "Овоз матнини авто-таржима қилиш",
-            "Matnga o‘girilgan ovozli xabarni ham tarjima qiladi", "Матнга ўгирилган овозли хабарни ҳам таржима қилади",
-            AeroConfig.autoTranslateVoice, AeroRowCell.BADGE_NONE);
-
-        items.add(UItem.asShadow(null));
-
-        // 3. Messages & Sending
-        items.add(UItem.asHeader(AeroConfig.tr("Xabarlar va Yuborish", "Хабарлар ва Юбориш")));
+        // 3. Xabarlar va Tarjima (with NovaGram > sub-pages)
+        items.add(UItem.asHeader(AeroConfig.tr("Xabarlar va Tarjima", "Хабарлар ва Таржима")));
+        addNavIfMatches(items, ID_AUTO_TRANSLATE_PAGE, 0xFF0284C7, R.drawable.msg_translate,
+            "Avto-tarjima", "Авто-таржима",
+            "Kiruvchi, chiquvchi tarjima va maqsadli tilni sozlash", "Кирувчи, чиқувчи таржима ва мақсадли тилни созлаш",
+            (AeroConfig.autoTranslate || AeroConfig.autoTranslateOutgoing ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("O‘chiq", "Ўчиқ"))
+                + " • " + AeroConfig.translateTargetLang.toUpperCase(Locale.US),
+            AeroRowCell.BADGE_NEW);
+        addNavIfMatches(items, ID_NEW_ALPHABET_PAGE, 0xFF7C3AED, R.drawable.msg_text_check,
+            "Yangi o‘zbek alifbosi (ş ç ō ḡ)", "Янги ўзбек алифбоси (ş ç ō ḡ)",
+            "Yuborish, chatlarda ko‘rsatish va Lotin ↔ Kirill konverteri", "Юбориш, чатларда кўрсатиш ва Лотин ↔ Кирилл конвертери",
+            (AeroConfig.newUzbekAlphabet || AeroConfig.newUzbekAlphabetInChats) ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("O‘chiq", "Ўчиқ"),
+            AeroRowCell.BADGE_AERO);
+        addNavIfMatches(items, ID_POSTFIX_PAGE, 0xFFA855F7, R.drawable.msg_recent,
+            "Avto-postfiks", "Авто-постфикс",
+            TextUtils.isEmpty(AeroConfig.autoPostfixText)
+                ? AeroConfig.tr("Har bir xabar oxiriga avtomatik imzo qo‘shadi", "Ҳар бир хабар охирига автоматик имзо қўшади")
+                : AeroConfig.autoPostfixText,
+            TextUtils.isEmpty(AeroConfig.autoPostfixText)
+                ? "Ҳар бир хабар охирига автоматик имзо қўшади"
+                : AeroConfig.autoPostfixText,
+            AeroConfig.autoPostfixEnabled ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("O‘chiq", "Ўчиқ"),
+            AeroRowCell.BADGE_NONE);
         addNavIfMatches(items, ID_TEXT_STYLE, 0xFF8B5CF6, R.drawable.msg_text_outlined,
             "Matn uslubi", "Матн услуби",
             "Yuboriladigan xabarlarga avtomatik shrift qo‘llash", "Юбориладиган хабарларга автоматик шрифт қўллаш",
             styleLabel(AeroConfig.textStyleMode), AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_NEW_ALPHABET, 0xFF7C3AED, R.drawable.msg_text_check,
-            "Yangi o‘zbek alifbosi", "Янги ўзбек алифбоси",
-            "o‘, g‘, sh, ch harflarini ixcham shaklga o‘giradi", "o‘, g‘, sh, ch ҳарфларини ихчам шаклга ўгиради",
-            AeroConfig.newUzbekAlphabet, AeroRowCell.BADGE_AERO);
-        addSwitchIfMatches(items, ID_POSTFIX_ENABLE, 0xFFA855F7, R.drawable.msg_recent,
-            "Avtomatik imzo (Postfix)", "Автоматик имзо (Postfix)",
-            "Har bir xabar oxiriga belgilangan matnni qo‘shadi", "Ҳар бир хабар охирига белгиланган матнни қўшади",
-            AeroConfig.autoPostfixEnabled, AeroRowCell.BADGE_NONE);
-        addNavIfMatches(items, ID_POSTFIX_TEXT, 0xFF9333EA, R.drawable.msg_settings,
-            "Imzo (Postfix) matnini tahrirlash", "Имзо (Postfix) матнини таҳрирлаш",
-            TextUtils.isEmpty(AeroConfig.autoPostfixText) ? AeroConfig.tr("Matn kiritilmagan", "Матн киритилмаган") : AeroConfig.autoPostfixText,
-            TextUtils.isEmpty(AeroConfig.autoPostfixText) ? "Матн киритилмаган" : AeroConfig.autoPostfixText,
-            "", AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_HEART_EFFECT, 0xFFEC4899, R.drawable.msg_stories_saved,
             "Yurakcha ❤️ effekti", "Юракча ❤️ эффекти",
             "Yuboriladigan xabar oxiriga yurakcha qo‘shadi", "Юбориладиган хабар охирига юракча қўшади",
@@ -442,7 +344,7 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Matnga mos kulgich/stiker yuborishni faollashtiradi", "Матнга мос кулгич/стикер юборишни фаоллаштиради",
             AeroConfig.autoSticker, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_FWD_NO_AUTHOR, 0xFF6366F1, R.drawable.msg_forward,
-            "Muallifisiz yo‘naltirish", "Муаллифисиз йўналтириш",
+            "Muallifsiz yo‘naltirish", "Муаллифсиз йўналтириш",
             "Forward qilganda asl muallif nomini yashiradi", "Forward қилганда асл муаллиф номини яширади",
             AeroConfig.forwardWithoutAuthor, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_FWD_NO_CAPTION, 0xFF4F46E5, R.drawable.msg_forward_replace,
@@ -453,10 +355,36 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Ikki marta bosganda amal", "Икки марта босганда амал",
             "Xabarni ikki marta bosganda nima qilish", "Хабарни икки марта босганда нима қилиш",
             doubleTapLabel(AeroConfig.doubleTapAction), AeroRowCell.BADGE_NEW);
+
+        items.add(UItem.asShadow(null));
+
+        // 4. Ovoz → Matn (STT)
+        items.add(UItem.asHeader(AeroConfig.tr("Ovoz → Matn (STT)", "Овоз → Матн (STT)")));
+        addSwitchIfMatches(items, ID_VOICE_TO_TEXT, 0xFF2563EB, R.drawable.msg_voicechat,
+            "Ovozli xabarlarni matnga aylantirish (STT)", "Овозли хабарларни матнга айлантириш (STT)",
+            "Ovozli xabarlar ostida matn (transkripsiya) tugmasini yoqadi", "Овозли хабарлар остида матн (транскрипция) тугмасини ёқади",
+            AeroConfig.voiceToTextEnabled, AeroRowCell.BADGE_NEW);
+        addNavIfMatches(items, ID_VOICE_LANG, 0xFF1D4ED8, R.drawable.msg_voicechat2,
+            "Ovoz → Matn (STT) tili", "Овоз → Матн (STT) тили",
+            "Transkripsiya uchun afzal til", "Транскрипция учун афзал тил",
+            AeroConfig.voiceToTextLang.toUpperCase(Locale.US), AeroRowCell.BADGE_NONE);
+        addSwitchIfMatches(items, ID_AUTO_TRANSLATE_VOICE, 0xFF3B82F6, R.drawable.msg_translate,
+            "Ovoz matnini avto-tarjima qilish", "Овоз матнини авто-таржима қилиш",
+            "Matnga o‘girilgan ovozli xabarni tanlangan tilga tarjima qiladi", "Матнга ўгирилган овозли хабарни танланган тилга таржима қилади",
+            AeroConfig.autoTranslateVoice, AeroRowCell.BADGE_NONE);
+
+        items.add(UItem.asShadow(null));
+
+        // 5. Chat va Qo‘ng‘iroqlar
+        items.add(UItem.asHeader(AeroConfig.tr("Chat va Qo‘ng‘iroqlar", "Чат ва Қўнғироқлар")));
         addSwitchIfMatches(items, ID_CONFIRM_CALL, 0xFF22C55E, R.drawable.msg_calls,
             "Qo‘ng‘iroqdan oldin tasdiqlash", "Қўнғироқдан олдин тасдиқлаш",
             "Tasodifiy qo‘ng‘iroq qilishni oldini oladi", "Тасодифий қўнғироқ қилишни олдини олади",
             AeroConfig.confirmBeforeCall, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatches(items, ID_RECORD_CALLS, 0xFF10B981, R.drawable.msg_calls,
+            "Qo‘ng‘iroqlarni yozib olish funksiyasi", "Қўнғироқларни ёзиб олиш функцияси",
+            "Ovozli qo‘ng‘iroqlar uchun yozuv ruxsati", "Овозли қўнғироқлар учун ёзув рухсати",
+            AeroConfig.recordCallsEnabled, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_CONFIRM_SEND_MEDIA, 0xFF10B981, R.drawable.msg_sticker,
             "Stiker va GIF yuborishni tasdiqlash", "Стикер ва GIF юборишни тасдиқлаш",
             "Stiker yoki GIF bosilganda so‘rov chiqaradi", "Стикер ёки GIF босилганда сўров чиқаради",
@@ -477,10 +405,14 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Kanal so‘nggi harakatlari tugmasi", "Канал сўнгги ҳаракатлари тугмаси",
             "Adminlar uchun Recent Actions menyusi", "Админлар учун Recent Actions менюси",
             AeroConfig.channelHistoryButton, AeroRowCell.BADGE_NONE);
+        addSwitchIfMatches(items, ID_SHOW_GHOST_BTN, 0xFF6366F1, R.drawable.msg_stealth_locked,
+            "Chatlarda tezkor Ghost tugmasi", "Чатларда тезкор Ghost тугмаси",
+            "Yuqori panelda Ghost rejimini bir bosishda almashtiradi", "Юқори панелда Ghost режимини бир босишда алмаштиради",
+            AeroConfig.showGhostButtonInChats, AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(null));
 
-        // 4. Network, Folders & Reminders
+        // 6. Tarmoq, Papkalar va Eslatmalar
         items.add(UItem.asHeader(AeroConfig.tr("Tarmoq, Papkalar va Eslatmalar", "Тармоқ, Папкалар ва Эслатмалар")));
         addNavIfMatches(items, ID_AERO_PROXY, 0xFF0EA5E9, R.drawable.proxy_check,
             "AeroGramProxy", "AeroGramProxy",
@@ -505,7 +437,7 @@ public class AeroSettingsActivity extends UniversalFragment {
         addNavIfMatches(items, ID_ADMIN_FOLDERS, 0xFF2563EB, R.drawable.msg_folders_groups,
             "Admin papkalari", "Админ папкалари",
             "Boshqaruv va admin papkalarini sozlash", "Бошқарув ва админ папкаларини созлаш",
-            AeroConfig.adminFoldersEnabled ? "Yoqilgan" : "Sozlash", AeroRowCell.BADGE_NONE);
+            AeroConfig.adminFoldersEnabled ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("Sozlash", "Созлаш"), AeroRowCell.BADGE_NONE);
         addNavIfMatches(items, ID_RECOMMENDED_FOLDERS, 0xFF1D4ED8, R.drawable.msg_folders_channels,
             "Tavsiya etilgan papkalar", "Тавсия этилган папкалар",
             "Shaxsiy, Guruhlar, Kanallar va Botlar papkalari", "Шахсий, Гуруҳлар, Каналлар ва Ботлар папкалари",
@@ -521,11 +453,11 @@ public class AeroSettingsActivity extends UniversalFragment {
 
         items.add(UItem.asShadow(null));
 
-        // 5. Appearance, Stories, Calls, Camera & Script
+        // 7. Interfeys, Hikoyalar va Ikonka
         items.add(UItem.asHeader(AeroConfig.tr("Interfeys, Hikoyalar va Ikonka", "Интерфейс, Ҳикоялар ва Иконка")));
         addNavIfMatches(items, ID_APP_ICON, 0xFF0284C7, R.drawable.ic_aerogram_monochrome,
-            "Ilova ikonkasi (Concept A)", "Илова иконкаси (Concept A)",
-            "6 ta maxsus Concept A AeroGram ikonkasidan tanlang", "6 та махсус Concept A AeroGram иконкасидан танланг",
+            "Ilova ikonkasi", "Илова иконкаси",
+            "6 ta maxsus AeroGram ikonkasidan tanlang", "6 та махсус AeroGram иконкасидан танланг",
             getCurrentIconTitle(), AeroRowCell.BADGE_AERO);
         addSwitchIfMatches(items, ID_SHOW_STORIES, 0xFFEC4899, R.drawable.msg_stories_add,
             "Stories panelini ko‘rsatish", "Stories панелини кўрсатиш",
@@ -533,20 +465,12 @@ public class AeroSettingsActivity extends UniversalFragment {
             AeroConfig.showStoriesBar, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_SAVE_STORIES_HD, 0xFFDB2777, R.drawable.msg_stories_save,
             "Hikoyalarni HD sifatda saqlash", "Ҳикояларни HD сифатда сақлаш",
-            "Story media fayllarini maksimal sifatda yuklaydi", "Story медиа файлларини максимал сифатда юклайди",
+            "Story larni maksimal sifatda yuklaydi va galereyaga saqlaydi", "Story ларни максимал сифатда юклайди ва галереяга сақлайди",
             AeroConfig.saveStoriesHd, AeroRowCell.BADGE_NEW);
-        addSwitchIfMatches(items, ID_SHOW_GHOST_BTN, 0xFF6366F1, R.drawable.msg_stealth_locked,
-            "Chatlarda tezkor Ghost tugmasi", "Чатларда тезкор Ghost тугмаси",
-            "Yuqori panelda Ghost rejimini bir bosishda almashtiradi", "Юқори панелда Ghost режимини бир босишда алмаштиради",
-            AeroConfig.showGhostButtonInChats, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_LIGHT_BRAND_ACCENT, 0xFF0EA5E9, R.drawable.msg_colors,
             "Yorug‘ mavzuda AeroGram aksenti", "Ёруғ мавзуда AeroGram акценти",
             "Yorug‘ rejimda AeroGram osmon rangini faol saqlaydi", "Ёруғ режимда AeroGram осмон рангини фаол сақлайди",
             AeroConfig.lightThemeBrandAccent, AeroRowCell.BADGE_NONE);
-        addSwitchIfMatches(items, ID_RECORD_CALLS, 0xFF10B981, R.drawable.msg_calls,
-            "Qo‘ng‘iroqlarni yozib olish funksiyasi", "Қўнғироқларни ёзиб олиш функцияси",
-            "Ovozli qo‘ng‘iroqlar uchun yozuv ruxsati", "Овозли қўнғироқлар учун ёзув рухсати",
-            AeroConfig.recordCallsEnabled, AeroRowCell.BADGE_NONE);
         addSwitchIfMatches(items, ID_DISABLE_ROUNDING, 0xFF3B82F6, R.drawable.msg_stats,
             "Raqamlarni yaxlitlamaslik", "Рақамларни яхлитламаслик",
             "1.2K o‘rniga aniq 1245 ko‘rsatiladi", "1.2K ўрнига аниқ 1245 кўрсатилади",
@@ -586,7 +510,7 @@ public class AeroSettingsActivity extends UniversalFragment {
 
         items.add(UItem.asShadow(null));
 
-        // 6. Storage, Link & Reset
+        // 8. Ma'lumotlar va Tiklash
         items.add(UItem.asHeader(AeroConfig.tr("Ma’lumotlar, Havola va Tiklash", "Маълумотлар, Ҳавола ва Тиклаш")));
         int totalSaved = AeroDeletedStore.getTotalSavedCount() + AeroEditHistoryStore.getTotalCount();
         addNavIfMatches(items, ID_CLEAR_HISTORY_STORE, 0xFFEF4444, R.drawable.msg_delete,
@@ -604,8 +528,8 @@ public class AeroSettingsActivity extends UniversalFragment {
             "", AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
-            "Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
+            "AeroGram v1.3.0 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
+            "AeroGram v1.3.0 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
         )));
     }
 
@@ -615,7 +539,7 @@ public class AeroSettingsActivity extends UniversalFragment {
                 return LocaleController.getString(ic.title);
             }
         }
-        return "Klassik Ko‘k";
+        return "Aero Sky";
     }
 
     private String styleLabel(int mode) {
@@ -655,15 +579,10 @@ public class AeroSettingsActivity extends UniversalFragment {
             case ID_ACCOUNTS:
                 presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_ACCOUNTS));
                 break;
-            case ID_BOTS:
-                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_BOTS));
-                break;
-            case ID_ANALYTICS:
-                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_STATS));
-                break;
 
             case ID_GHOST_MASTER:
                 AeroConfig.toggleMasterGhost(!AeroConfig.isAnyGhostActive());
+                MessagesController.forceAeroOfflineStatusAll(true);
                 reloadList();
                 break;
             case ID_GHOST_DONT_READ:
@@ -679,6 +598,7 @@ public class AeroSettingsActivity extends UniversalFragment {
             case ID_GHOST_OFFLINE:
                 AeroConfig.ghostStayOffline = !AeroConfig.ghostStayOffline;
                 AeroConfig.saveBool("ghostStayOffline", AeroConfig.ghostStayOffline);
+                MessagesController.forceAeroOfflineStatusAll(true);
                 reloadList();
                 break;
             case ID_GHOST_TYPING:
@@ -745,28 +665,11 @@ public class AeroSettingsActivity extends UniversalFragment {
                 }
                 break;
 
-            case ID_AUTO_TRANSLATE:
-                AeroConfig.autoTranslate = !AeroConfig.autoTranslate;
-                AeroConfig.saveBool("autoTranslate", AeroConfig.autoTranslate);
-                reloadList();
+            case ID_AUTO_TRANSLATE_PAGE:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_AUTO_TRANSLATE));
                 break;
             case ID_TRANSLATE_LANG:
                 presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_TRANSLATE_LANG));
-                break;
-            case ID_AUTO_TRANSLATE_OUT:
-                AeroConfig.autoTranslateOutgoing = !AeroConfig.autoTranslateOutgoing;
-                AeroConfig.saveBool("autoTranslateOutgoing", AeroConfig.autoTranslateOutgoing);
-                reloadList();
-                break;
-            case ID_ASK_TRANSLATE_SEND:
-                AeroConfig.askBeforeTranslateSend = !AeroConfig.askBeforeTranslateSend;
-                AeroConfig.saveBool("askBeforeTranslateSend", AeroConfig.askBeforeTranslateSend);
-                reloadList();
-                break;
-            case ID_TRANSLATE_WHOLE_CHAT:
-                AeroConfig.translateWholeChat = !AeroConfig.translateWholeChat;
-                AeroConfig.saveBool("translateWholeChat", AeroConfig.translateWholeChat);
-                reloadList();
                 break;
             case ID_VOICE_TO_TEXT:
                 AeroConfig.voiceToTextEnabled = !AeroConfig.voiceToTextEnabled;
@@ -785,18 +688,11 @@ public class AeroSettingsActivity extends UniversalFragment {
             case ID_TEXT_STYLE:
                 presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_TEXT_STYLE));
                 break;
-            case ID_NEW_ALPHABET:
-                AeroConfig.newUzbekAlphabet = !AeroConfig.newUzbekAlphabet;
-                AeroConfig.saveBool("newUzbekAlphabet", AeroConfig.newUzbekAlphabet);
-                reloadList();
+            case ID_NEW_ALPHABET_PAGE:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_NEW_ALPHABET));
                 break;
-            case ID_POSTFIX_ENABLE:
-                AeroConfig.autoPostfixEnabled = !AeroConfig.autoPostfixEnabled;
-                AeroConfig.saveBool("autoPostfixEnabled", AeroConfig.autoPostfixEnabled);
-                reloadList();
-                break;
-            case ID_POSTFIX_TEXT:
-                showPostfixEditor();
+            case ID_POSTFIX_PAGE:
+                presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_POSTFIX));
                 break;
             case ID_HEART_EFFECT:
                 AeroConfig.heartEffect = !AeroConfig.heartEffect;
@@ -997,6 +893,7 @@ public class AeroSettingsActivity extends UniversalFragment {
                         .setMessage(AeroConfig.tr("Barcha AeroGram sozlamalari standart holatga qaytarilsinmi?", "Барча AeroGram созламалари стандарт ҳолатга қайтарилсинми?"))
                         .setPositiveButton(AeroConfig.tr("Tiklash", "Тиклаш"), (d, w) -> {
                             AeroConfig.resetAll();
+                            MessagesController.forceAeroOfflineStatusAll(true);
                             LaunchActivity.invalidateAeroSecurity();
                             reloadList();
                             Toast.makeText(getParentActivity(), AeroConfig.tr("Sozlamalar tiklandi", "Созламалар тикланди"), Toast.LENGTH_SHORT).show();
@@ -1008,36 +905,6 @@ public class AeroSettingsActivity extends UniversalFragment {
         }
     }
 
-    private void showPostfixEditor() {
-        if (getParentActivity() == null) return;
-        LinearLayout box = new LinearLayout(getParentActivity());
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(8), AndroidUtilities.dp(20), AndroidUtilities.dp(4));
-
-        EditText et = new EditText(getParentActivity());
-        et.setText(AeroConfig.autoPostfixText);
-        et.setHint(AeroConfig.tr("Masalan: — AeroGram orqali", "Масалан: — AeroGram орқали"));
-        et.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        et.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
-        box.addView(et);
-
-        new AlertDialog.Builder(getParentActivity())
-            .setTitle(AeroConfig.tr("Avtomatik imzo (Postfix)", "Автоматик имзо (Postfix)"))
-            .setView(box)
-            .setPositiveButton(AeroConfig.tr("Saqlash", "Сақлаш"), (d, w) -> {
-                String txt = et.getText() == null ? "" : et.getText().toString();
-                AeroConfig.autoPostfixText = txt;
-                AeroConfig.saveString("autoPostfixText", txt);
-                if (!TextUtils.isEmpty(txt)) {
-                    AeroConfig.autoPostfixEnabled = true;
-                    AeroConfig.saveBool("autoPostfixEnabled", true);
-                }
-                reloadList();
-            })
-            .setNegativeButton(AeroConfig.tr("Bekor qilish", "Бекор қилиш"), null)
-            .show();
-    }
-
     private void showIconPickerDialog() {
         if (getParentActivity() == null) return;
         LauncherIconController.LauncherIcon[] vals = LauncherIconController.LauncherIcon.values();
@@ -1047,7 +914,7 @@ public class AeroSettingsActivity extends UniversalFragment {
             names[i] = LocaleController.getString(vals[i].title) + suffix;
         }
         new AlertDialog.Builder(getParentActivity())
-            .setTitle(AeroConfig.tr("Ilova ikonkasi (Concept A)", "Илова иконкаси (Concept A)"))
+            .setTitle(AeroConfig.tr("Ilova ikonkasi", "Илова иконкаси"))
             .setItems(names, (d, which) -> {
                 LauncherIconController.LauncherIcon chosen = vals[which];
                 LauncherIconController.setIcon(chosen);

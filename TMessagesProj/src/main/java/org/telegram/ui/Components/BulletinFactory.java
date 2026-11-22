@@ -107,7 +107,7 @@ public final class BulletinFactory {
             Bulletin b = createErrorBulletin(LocaleController.formatString(R.string.UnknownError));
             b.hideAfterBottomSheet = false;
             b.show(top);
-        } else if (error.code != 406) {
+        } else if (error.code != 406 && !"MESSAGE_ID_INVALID".equals(error.text)) {
             Bulletin b = createErrorBulletin(LocaleController.formatString(R.string.UnknownErrorCode, error.text));
             b.hideAfterBottomSheet = false;
             b.show(top);
@@ -118,6 +118,7 @@ public final class BulletinFactory {
     }
     public void showForError(String errorCode, boolean top) {
         if (!LaunchActivity.isActive) return;
+        if ("MESSAGE_ID_INVALID".equals(errorCode)) return;
         if (TextUtils.isEmpty(errorCode)) {
             Bulletin b = createErrorBulletin(LocaleController.formatString(R.string.UnknownError));
             b.hideAfterBottomSheet = false;
@@ -141,11 +142,11 @@ public final class BulletinFactory {
 
 
     public static void showError(String error) {
-        if (!LaunchActivity.isActive) return;
+        if (!LaunchActivity.isActive || "MESSAGE_ID_INVALID".equals(error)) return;
         global().createErrorBulletin(LocaleController.formatString(R.string.UnknownErrorCode, error)).show();
     }
     public static void showError(String error, FrameLayout topContainer, Theme.ResourcesProvider resourcesProvider) {
-        if (!LaunchActivity.isActive) return;
+        if (!LaunchActivity.isActive || "MESSAGE_ID_INVALID".equals(error)) return;
         if (topContainer == null) {
             showError(error);
             return;
@@ -158,7 +159,7 @@ public final class BulletinFactory {
 
     public static void showError(TLRPC.TL_error error) {
         if (!LaunchActivity.isActive) return;
-        if (error != null && error.code == 406) return;
+        if (error != null && (error.code == 406 || "MESSAGE_ID_INVALID".equals(error.text))) return;
         global().createErrorBulletin(LocaleController.formatString(R.string.UnknownErrorCode, error.text)).show();
     }
 

@@ -91,6 +91,60 @@ public class AeroDeletedStore {
         }
     }
 
+    public static synchronized void unmarkDeleted(int account, long dialogId, ArrayList<Integer> msgIds) {
+        if (msgIds == null || msgIds.isEmpty()) {
+            return;
+        }
+        SharedPreferences.Editor editor = prefs != null ? prefs.edit() : null;
+        boolean anyChanged = false;
+        if (dialogId != 0) {
+            String k = key(account, dialogId);
+            anyChanged = removeFromKeyLocked(k, msgIds, editor);
+        } else {
+            String prefix = account + "_";
+            for (String k : cache.keySet()) {
+                if (k.startsWith(prefix)) {
+                    if (removeFromKeyLocked(k, msgIds, editor)) {
+                        anyChanged = true;
+                    }
+                }
+            }
+        }
+        if (anyChanged && editor != null) {
+            editor.apply();
+        }
+    }
+
+    private static boolean removeFromKeyLocked(String k, ArrayList<Integer> msgIds, SharedPreferences.Editor editor) {
+        Set<Integer> set = cache.get(k);
+        if (set == null || set.isEmpty()) {
+            return false;
+        }
+        boolean changed = false;
+        for (int i = 0; i < msgIds.size(); i++) {
+            Integer id = msgIds.get(i);
+            if (id != null && set.remove(id)) {
+                changed = true;
+            }
+        }
+        if (!changed) {
+            return false;
+        }
+        if (set.isEmpty()) {
+            cache.remove(k);
+            if (editor != null) {
+                editor.remove(k);
+            }
+        } else if (editor != null) {
+            Set<String> strSet = new HashSet<>(set.size());
+            for (Integer id : set) {
+                strSet.add(String.valueOf(id));
+            }
+            editor.putStringSet(k, strSet);
+        }
+        return true;
+    }
+
     public static boolean isDeleted(int account, long dialogId, int msgId) {
         if (dialogId == 0 || msgId <= 0) {
             return false;

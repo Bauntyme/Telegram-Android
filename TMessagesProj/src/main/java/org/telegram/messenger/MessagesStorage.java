@@ -15677,6 +15677,26 @@ public class MessagesStorage extends BaseController {
         });
     }
 
+    public void deleteAeroDeletedMessages(long dialogId, ArrayList<Integer> messages) {
+        if (messages == null || messages.isEmpty() || database == null) {
+            return;
+        }
+        final ArrayList<Integer> copy = new ArrayList<>(messages);
+        storageQueue.postRunnable(() -> {
+            try {
+                ensureAeroDeletedTable();
+                String ids = TextUtils.join(",", copy);
+                if (dialogId != 0) {
+                    database.executeFast(String.format(Locale.US, "DELETE FROM aero_deleted_v1 WHERE mid IN(%s) AND uid = %d", ids, dialogId)).stepThis().dispose();
+                } else {
+                    database.executeFast(String.format(Locale.US, "DELETE FROM aero_deleted_v1 WHERE mid IN(%s)", ids)).stepThis().dispose();
+                }
+            } catch (Exception e) {
+                checkSQLException(e);
+            }
+        });
+    }
+
     public ArrayList<Long> markMessagesAsDeleted(long dialogId, ArrayList<Integer> messages, boolean useQueue, boolean deleteFiles, int mode, int topicId) {
         if (messages.isEmpty()) {
             return null;

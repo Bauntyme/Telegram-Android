@@ -703,6 +703,8 @@ public class AlertsCreator {
             }
         } else if (request instanceof TLRPC.TL_payments_assignPlayMarketTransaction) {
             showSimpleAlert(fragment, LocaleController.getString(R.string.PaymentConfirmationError) + "\n" + error.text);
+        } else if ("MESSAGE_ID_INVALID".equals(error.text)) {
+            return null;
         }
 
         return null;
@@ -7858,6 +7860,30 @@ public class AlertsCreator {
 
         int currentDate = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
         boolean hasNonDiceMessages = false;
+        boolean allAeroDeleted = false;
+        if (selectedMessage != null) {
+            if (selectedGroup != null && !selectedGroup.messages.isEmpty()) {
+                allAeroDeleted = true;
+                for (int a = 0; a < selectedGroup.messages.size(); a++) {
+                    if (!selectedGroup.messages.get(a).isAeroDeleted()) {
+                        allAeroDeleted = false;
+                        break;
+                    }
+                }
+            } else {
+                allAeroDeleted = selectedMessage.isAeroDeleted();
+            }
+        } else if (selectedMessages != null && (selectedMessages[0].size() + selectedMessages[1].size()) > 0) {
+            allAeroDeleted = true;
+            for (int a = 0; a < 2 && allAeroDeleted; a++) {
+                for (int b = 0; b < selectedMessages[a].size(); b++) {
+                    if (!selectedMessages[a].valueAt(b).isAeroDeleted()) {
+                        allAeroDeleted = false;
+                        break;
+                    }
+                }
+            }
+        }
 
         final long unsafePaidSuggestedPostTime = MessagesController.getInstance(currentAccount).config.starsSuggestedPostAgeMin.get(TimeUnit.SECONDS);
         boolean hasUnsafePaidSuggestedPostStars = false;
@@ -7905,7 +7931,7 @@ public class AlertsCreator {
         boolean hasNotOut = false;
         int myMessagesCount = 0;
         boolean canDeleteInbox = encryptedChat == null && user != null && canRevokeInbox && revokeTimeLimit == 0x7fffffff;
-        if (chat != null && chat.megagroup && !scheduled && !isSavedMessages) {
+        if (!allAeroDeleted && chat != null && chat.megagroup && !scheduled && !isSavedMessages) {
             ArrayList<MessageObject> messages = new ArrayList<>();
             if (selectedMessage != null) {
                 if (selectedMessage.messageOwner.action == null || selectedMessage.messageOwner.action instanceof TLRPC.TL_messageActionEmpty ||
@@ -8045,7 +8071,7 @@ public class AlertsCreator {
                 builder.setView(frameLayout);
                 builder.setCustomViewOffset(9);
             }
-        } else if (!scheduled && !isSavedMessages && !ChatObject.isChannel(chat) && encryptedChat == null) {
+        } else if (!allAeroDeleted && !scheduled && !isSavedMessages && !ChatObject.isChannel(chat) && encryptedChat == null) {
             if (user != null && user.id != UserConfig.getInstance(currentAccount).getClientUserId() && (!user.bot || user.support) || chat != null) {
                 if (selectedMessage != null) {
                     boolean hasOutgoing = !selectedMessage.isSendError() && (

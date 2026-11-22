@@ -1152,7 +1152,18 @@ public class TranslateController extends BaseController {
                 }*/
 
                 final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
-                if (isTranscription) {
+                boolean hasLocalDeleted = false;
+                if (!isTranscription && pendingTranslation1.messageIds != null && pendingTranslation1.messageTexts != null
+                        && pendingTranslation1.messageIds.size() == pendingTranslation1.messageTexts.size()) {
+                    for (int i = 0; i < pendingTranslation1.messageIds.size(); i++) {
+                        Integer mid = pendingTranslation1.messageIds.get(i);
+                        if (mid != null && AeroDeletedStore.isDeleted(currentAccount, dialogId, mid)) {
+                            hasLocalDeleted = true;
+                            break;
+                        }
+                    }
+                }
+                if (isTranscription || hasLocalDeleted) {
                     req.flags |= 2;
                     req.text.addAll(pendingTranslation1.messageTexts);
                 } else {

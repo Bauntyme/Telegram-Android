@@ -404,6 +404,9 @@ public class MessagesController extends BaseController implements NotificationCe
     private int statusRequest;
     private int statusSettingState;
     private boolean offlineSent;
+    private long lastAeroOfflineSentTime;
+    private final java.util.HashSet<String> aeroUserDeletedIds = new java.util.HashSet<>();
+    private final java.util.HashSet<Integer> aeroUserDeletedNonChannelMids = new java.util.HashSet<>();
     private String uploadingAvatar;
     private final LongSparseArray<ArrayList<MessageObject>> welcomeMessages = new LongSparseArray<>();
 
@@ -6635,6 +6638,11 @@ public class MessagesController extends BaseController implements NotificationCe
         resetingDialogs = false;
         lastStatusUpdateTime = 0;
         offlineSent = false;
+        lastAeroOfflineSentTime = 0;
+        synchronized (aeroUserDeletedIds) {
+            aeroUserDeletedIds.clear();
+            aeroUserDeletedNonChannelMids.clear();
+        }
         registeringForPush = false;
         getDifferenceFirstSync = true;
         uploadingAvatar = null;
@@ -9325,11 +9333,48 @@ public class MessagesController extends BaseController implements NotificationCe
                         Integer id = messages.get(a);
                         if (obj.getId() == id) {
                             obj.deleted = true;
+                            obj.aeroDeleted = false;
                             break;
                         }
                     }
                 }
             }
+        }
+    }
+
+    public void markAeroUserDeleted(long dialogId, ArrayList<Integer> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+        synchronized (aeroUserDeletedIds) {
+            for (int i = 0; i < messages.size(); i++) {
+                Integer mid = messages.get(i);
+                if (mid != null && mid != 0) {
+                    if (dialogId != 0) {
+                        aeroUserDeletedIds.add(dialogId + "_" + mid);
+                    } else {
+                        aeroUserDeletedNonChannelMids.add(mid);
+                    }
+                    if (!DialogObject.isEncryptedDialog(dialogId) && (dialogId > 0 || (DialogObject.isChatDialog(dialogId) && !ChatObject.isChannel(getChat(-dialogId))))) {
+                        aeroUserDeletedNonChannelMids.add(mid);
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean isAeroUserDeleted(long dialogId, int mid) {
+        if (mid == 0) {
+            return false;
+        }
+        synchronized (aeroUserDeletedIds) {
+            if (dialogId != 0 && aeroUserDeletedIds.contains(dialogId + "_" + mid)) {
+                return true;
+            }
+            if (dialogId == 0 || dialogId > 0 || (DialogObject.isChatDialog(dialogId) && !ChatObject.isChannel(getChat(-dialogId)))) {
+                return aeroUserDeletedNonChannelMids.contains(mid);
+            }
+            return false;
         }
     }
 
@@ -9361,12 +9406,37 @@ public class MessagesController extends BaseController implements NotificationCe
             } else {
                 channelId = 0;
             }
+            if (!scheduled && !quickReplies && !welcomeMessages) {
+                markAeroUserDeleted(dialogId, messages);
+            }
             if (!cacheOnly) {
                 toSend = new ArrayList<>();
+                ArrayList<MessageObject> dlgObjs = dialogId != 0 ? dialogMessage.get(dialogId) : null;
                 for (int a = 0, N = messages.size(); a < N; a++) {
                     Integer mid = messages.get(a);
                     if (mid > 0) {
-                        toSend.add(mid);
+                        boolean alreadyAeroDeleted = false;
+                        if (!scheduled && !quickReplies && !welcomeMessages && AeroConfig.saveDeletedMessages) {
+                            if (dialogId != 0 && AeroDeletedStore.isDeleted(currentAccount, dialogId, mid)) {
+                                alreadyAeroDeleted = true;
+                            } else {
+                                MessageObject mo = dialogMessagesByIds.get(mid);
+                                if (mo != null && mo.isAeroDeleted()) {
+                                    alreadyAeroDeleted = true;
+                                } else if (dlgObjs != null) {
+                                    for (int j = 0; j < dlgObjs.size(); j++) {
+                                        MessageObject dmo = dlgObjs.get(j);
+                                        if (dmo != null && dmo.getId() == mid && dmo.isAeroDeleted()) {
+                                            alreadyAeroDeleted = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (!alreadyAeroDeleted) {
+                            toSend.add(mid);
+                        }
                     }
                 }
             }
@@ -9380,13 +9450,19 @@ public class MessagesController extends BaseController implements NotificationCe
             } else if (welcomeMessages) {
                 getMessagesStorage().markMessagesAsDeleted(dialogId, messages, true, false, ChatActivity.MODE_WELCOME_MESSAGES, topicId);
             } else {
+                AeroDeletedStore.unmarkDeleted(currentAccount, dialogId, messages);
+                getMessagesStorage().deleteAeroDeletedMessages(dialogId, messages);
                 if (channelId == 0) {
                     for (int a = 0; a < messages.size(); a++) {
                         Integer id = messages.get(a);
                         MessageObject obj = dialogMessagesByIds.get(id);
                         if (obj != null) {
                             obj.deleted = true;
+                            obj.aeroDeleted = false;
                         }
+                    }
+                    if (dialogId != 0) {
+                        markDialogMessageAsDeleted(dialogId, messages);
                     }
                 } else {
                     markDialogMessageAsDeleted(dialogId, messages);
@@ -9403,6 +9479,9 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
         if (cacheOnly) {
+            return;
+        }
+        if (taskId == 0 && toSend != null && toSend.isEmpty() && (randoms == null || randoms.isEmpty() || encryptedChat == null)) {
             return;
         }
 
@@ -10546,6 +10625,70 @@ public class MessagesController extends BaseController implements NotificationCe
         });
     }
 
+    public static void forceAeroOfflineStatusAll(boolean immediate) {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            MessagesController mc = getInstance(a);
+            if (mc != null && mc.getUserConfig().isClientActivated()) {
+                if (AeroConfig.ghostStayOffline) {
+                    mc.forceAeroOfflineStatus(immediate);
+                } else {
+                    mc.updateTimerProcOnStageQueue(true);
+                }
+            }
+        }
+    }
+
+    public void updateTimerProcOnStageQueue(boolean resetOffline) {
+        Utilities.stageQueue.postRunnable(() -> {
+            if (resetOffline) {
+                offlineSent = false;
+                lastAeroOfflineSentTime = 0;
+                statusSettingState = 0;
+                lastStatusUpdateTime = 0;
+            }
+            updateTimerProc();
+        });
+    }
+
+    public void forceAeroOfflineStatus(boolean immediate) {
+        if (!AeroConfig.ghostStayOffline || !getUserConfig().isClientActivated()) {
+            return;
+        }
+        Utilities.stageQueue.postRunnable(() -> sendAeroOfflineStatusLocked(immediate));
+    }
+
+    private void sendAeroOfflineStatusLocked(boolean immediate) {
+        if (!AeroConfig.ghostStayOffline || !getUserConfig().isClientActivated()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (!immediate && (statusSettingState == 2 || (offlineSent && Math.abs(now - lastAeroOfflineSentTime) < 25000))) {
+            return;
+        }
+        statusSettingState = 2;
+        if (statusRequest != 0) {
+            getConnectionsManager().cancelRequest(statusRequest, true);
+        }
+        TL_account.updateStatus req = new TL_account.updateStatus();
+        req.offline = true;
+        final int[] reqHolder = new int[1];
+        reqHolder[0] = getConnectionsManager().sendRequest(req, (response, error) -> Utilities.stageQueue.postRunnable(() -> {
+            if (statusRequest == reqHolder[0] || statusRequest == 0) {
+                if (error == null) {
+                    offlineSent = true;
+                    lastAeroOfflineSentTime = System.currentTimeMillis();
+                } else if (lastStatusUpdateTime != 0) {
+                    lastStatusUpdateTime += 5000;
+                }
+                if (statusSettingState == 2) {
+                    statusSettingState = 0;
+                }
+                statusRequest = 0;
+            }
+        }));
+        statusRequest = reqHolder[0];
+    }
+
     public void updateTimerProc() {
         long currentTime = System.currentTimeMillis();
 
@@ -10553,7 +10696,11 @@ public class MessagesController extends BaseController implements NotificationCe
         checkReadTasks();
 
         if (getUserConfig().isClientActivated()) {
-            if (!ignoreSetOnline && !AeroConfig.ghostStayOffline && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
+            if (AeroConfig.ghostStayOffline) {
+                if (statusSettingState != 2 && (!offlineSent || Math.abs(currentTime - lastAeroOfflineSentTime) >= 25000)) {
+                    sendAeroOfflineStatusLocked(false);
+                }
+            } else if (!ignoreSetOnline && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
                 if (ApplicationLoader.mainInterfacePausedStageQueueTime != 0 && Math.abs(ApplicationLoader.mainInterfacePausedStageQueueTime - System.currentTimeMillis()) > 1000) {
                     if (statusSettingState != 1 && (lastStatusUpdateTime == 0 || Math.abs(System.currentTimeMillis() - lastStatusUpdateTime) >= 55000 || offlineSent)) {
                         statusSettingState = 1;
@@ -10588,10 +10735,14 @@ public class MessagesController extends BaseController implements NotificationCe
                 statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
                     if (error == null) {
                         offlineSent = true;
+                        lastAeroOfflineSentTime = System.currentTimeMillis();
                     } else {
                         if (lastStatusUpdateTime != 0) {
                             lastStatusUpdateTime += 5000;
                         }
+                    }
+                    if (statusSettingState == 2) {
+                        statusSettingState = 0;
                     }
                     statusRequest = 0;
                 });
@@ -21286,13 +21437,26 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (arrayList == null) {
                         continue;
                     }
+                    ArrayList<Integer> aeroPreserveList = AeroConfig.saveDeletedMessages ? new ArrayList<>() : null;
+                    ArrayList<Integer> realDeleteList = AeroConfig.saveDeletedMessages ? new ArrayList<>() : arrayList;
                     if (AeroConfig.saveDeletedMessages) {
+                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                            Integer mid = arrayList.get(b);
+                            if (mid == null) continue;
+                            if (isAeroUserDeleted(dialogId, mid)) {
+                                realDeleteList.add(mid);
+                            } else {
+                                aeroPreserveList.add(mid);
+                            }
+                        }
+                    }
+                    if (aeroPreserveList != null && !aeroPreserveList.isEmpty()) {
                         if (dialogId != 0) {
-                            AeroDeletedStore.markDeleted(currentAccount, dialogId, arrayList);
+                            AeroDeletedStore.markDeleted(currentAccount, dialogId, aeroPreserveList);
                         }
                         if (dialogId == 0) {
-                            for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                                Integer id = arrayList.get(b);
+                            for (int b = 0, size2 = aeroPreserveList.size(); b < size2; b++) {
+                                Integer id = aeroPreserveList.get(b);
                                 MessageObject obj = dialogMessagesByIds.get(id);
                                 if (obj != null) {
                                     obj.aeroDeleted = true;
@@ -21305,8 +21469,8 @@ public class MessagesController extends BaseController implements NotificationCe
                                 for (int i = 0; i < objs.size(); ++i) {
                                     MessageObject obj = objs.get(i);
                                     if (obj != null) {
-                                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                                            if (obj.getId() == arrayList.get(b)) {
+                                        for (int b = 0, size2 = aeroPreserveList.size(); b < size2; b++) {
+                                            if (obj.getId() == aeroPreserveList.get(b)) {
                                                 obj.aeroDeleted = true;
                                                 break;
                                             }
@@ -21315,17 +21479,16 @@ public class MessagesController extends BaseController implements NotificationCe
                                 }
                             }
                         }
-                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
-                    } else {
-                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false);
+                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, aeroPreserveList, -dialogId, false);
+                    }
+                    if (!realDeleteList.isEmpty()) {
+                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, realDeleteList, -dialogId, false);
                         if (dialogId == 0) {
-                            for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                                Integer id = arrayList.get(b);
+                            for (int b = 0, size2 = realDeleteList.size(); b < size2; b++) {
+                                Integer id = realDeleteList.get(b);
                                 MessageObject obj = dialogMessagesByIds.get(id);
                                 if (obj != null) {
-                                    if (BuildVars.LOGS_ENABLED) {
-                                        FileLog.d("mark messages " + obj.getId() + " deleted");
-                                    }
+                                    obj.aeroDeleted = false;
                                     obj.deleted = true;
                                 }
                             }
@@ -21335,8 +21498,9 @@ public class MessagesController extends BaseController implements NotificationCe
                                 for (int i = 0; i < objs.size(); ++i) {
                                     MessageObject obj = objs.get(i);
                                     if (obj != null) {
-                                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
-                                            if (obj.getId() == arrayList.get(b)) {
+                                        for (int b = 0, size2 = realDeleteList.size(); b < size2; b++) {
+                                            if (obj.getId() == realDeleteList.get(b)) {
+                                                obj.aeroDeleted = false;
                                                 obj.deleted = true;
                                                 break;
                                             }
@@ -21447,7 +21611,28 @@ public class MessagesController extends BaseController implements NotificationCe
                 for (int a = 0, size = deletedMessages.size(); a < size; a++) {
                     long key = deletedMessages.keyAt(a);
                     ArrayList<Integer> arrayList = deletedMessages.valueAt(a);
-                    getMessagesStorage().preserveDeletedMessages(key, arrayList);
+                    if (arrayList == null) continue;
+                    ArrayList<Integer> toPreserve = new ArrayList<>();
+                    ArrayList<Integer> toActuallyDelete = new ArrayList<>();
+                    for (int b = 0, s2 = arrayList.size(); b < s2; b++) {
+                        Integer mid = arrayList.get(b);
+                        if (mid == null) continue;
+                        if (isAeroUserDeleted(key, mid)) {
+                            toActuallyDelete.add(mid);
+                        } else {
+                            toPreserve.add(mid);
+                        }
+                    }
+                    if (!toPreserve.isEmpty()) {
+                        getMessagesStorage().preserveDeletedMessages(key, toPreserve);
+                    }
+                    if (!toActuallyDelete.isEmpty()) {
+                        getMessagesStorage().deleteAeroDeletedMessages(key, toActuallyDelete);
+                        getMessagesStorage().getStorageQueue().postRunnable(() -> {
+                            ArrayList<Long> dialogIds = getMessagesStorage().markMessagesAsDeleted(key, toActuallyDelete, false, true, 0, 0);
+                            getMessagesStorage().updateDialogsWithDeletedMessages(key, -key, toActuallyDelete, dialogIds);
+                        });
+                    }
                 }
             }
         }

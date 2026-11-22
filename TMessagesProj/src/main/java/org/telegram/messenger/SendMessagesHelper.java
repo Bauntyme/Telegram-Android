@@ -1786,6 +1786,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         if (prevSize != 0 && unsentMessages.size() == 0) {
             checkUnsentMessages();
         }
+        if (AeroConfig.ghostStayOffline) {
+            getMessagesController().forceAeroOfflineStatus(true);
+        }
     }
 
     public void processForwardFromMyName(MessageObject messageObject, long did, long payStars, long monoForumPeerId, MessageSuggestionParams suggestionParams) {

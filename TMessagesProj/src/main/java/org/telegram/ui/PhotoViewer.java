@@ -4541,9 +4541,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             boolean sent = args.length > 3 && (Boolean) args[3];
             long channelId = (Long) args[1];
             ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>) args[0];
-            if (!sent && org.telegram.messenger.AeroConfig.saveDeletedMessages) {
-                return;
-            }
+            boolean aeroOnlyUserDeleted = !sent && org.telegram.messenger.AeroConfig.saveDeletedMessages;
             boolean reset = false;
             boolean resetCurrent = false;
             for (int x = 0; x < 2; x++) {
@@ -4557,7 +4555,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                                 for (int a = 0, N = markAsDeletedMessages.size(); a < N; a++) {
                                     int mid = markAsDeletedMessages.get(a);
                                     MessageObject message = ids[b].get(markAsDeletedMessages.get(a));
-                                    if (message != null) {
+                                    if (message != null && (!aeroOnlyUserDeleted || MessagesController.getInstance(currentAccount).isAeroUserDeleted(message.getDialogId(), mid))) {
                                         ids[b].remove(mid);
                                         arr.remove(message);
                                         if (b == 0) {

@@ -798,6 +798,31 @@ public class TranscribeButton {
             AndroidUtilities.runOnUIThread(() -> {
                 NotificationCenter.getInstance(finalMessageObject.currentAccount).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, finalMessageObject, (Long) transcription_id, (String) text, (Boolean) true, (Boolean) true);
             });
+            if (org.telegram.messenger.AeroConfig.autoTranslateVoice && !TextUtils.isEmpty(text)) {
+                final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
+                req.flags |= 2;
+                final TLRPC.TL_textWithEntities t = new TLRPC.TL_textWithEntities();
+                t.text = text;
+                req.text.add(t);
+                req.to_lang = org.telegram.messenger.TranslateController.normalizeLanguage(org.telegram.messenger.AeroConfig.translateTargetLang);
+                final int acc = finalMessageObject.currentAccount;
+                ConnectionsManager.getInstance(acc).sendRequest(req, (res, err) -> {
+                    if (res instanceof TLRPC.TL_messages_translateResult) {
+                        ArrayList<TLRPC.TL_textWithEntities> translated = ((TLRPC.TL_messages_translateResult) res).result;
+                        if (translated != null && !translated.isEmpty() && translated.get(0) != null && !TextUtils.isEmpty(translated.get(0).text)) {
+                            final String transText = translated.get(0).text.trim();
+                            if (!transText.equalsIgnoreCase(text.trim())) {
+                                final String combined = text + "\n\n🌐 " + transText;
+                                finalMessageObject.messageOwner.voiceTranscription = combined;
+                                MessagesStorage.getInstance(acc).updateMessageVoiceTranscription(finalMessageObject.getDialogId(), finalMessageObject.getId(), combined, finalMessageObject.messageOwner);
+                                AndroidUtilities.runOnUIThread(() -> {
+                                    NotificationCenter.getInstance(acc).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, finalMessageObject, (Long) transcription_id, (String) combined, (Boolean) true, (Boolean) true);
+                                });
+                            }
+                        }
+                    }
+                });
+            }
             return true;
         } catch (Exception ignore) {}
         return false;

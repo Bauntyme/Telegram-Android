@@ -3828,7 +3828,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 } else if (id == 779) {
                     boolean nextGhost = !AeroConfig.isAnyGhostActive();
                     AeroConfig.toggleMasterGhost(nextGhost);
-                    getMessagesController().updateTimerProc();
+                    MessagesController.forceAeroOfflineStatusAll(true);
                     if (ghostQuickItem != null) {
                         ghostQuickItem.setAlpha(nextGhost ? 1.0f : 0.65f);
                     }

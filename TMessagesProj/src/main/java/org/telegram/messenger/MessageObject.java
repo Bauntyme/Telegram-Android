@@ -4811,7 +4811,7 @@ public class MessageObject {
 
     private void updateMessageText(AbstractMap<Long, TLRPC.User> users, AbstractMap<Long, TLRPC.Chat> chats, LongSparseArray<TLRPC.User> sUsers, LongSparseArray<TLRPC.Chat> sChats) {
         aeroEditHistoryApplied = false;
-        if (AeroConfig.saveDeletedMessages && messageOwner != null && AeroDeletedStore.isDeleted(currentAccount, getDialogId(), getId())) {
+        if (!deleted && AeroConfig.saveDeletedMessages && messageOwner != null && AeroDeletedStore.isDeleted(currentAccount, getDialogId(), getId())) {
             aeroDeleted = true;
         }
         TLRPC.User fromUser = null;
@@ -7110,10 +7110,10 @@ public class MessageObject {
     }
 
     public boolean isAeroDeleted() {
-        if (!AeroConfig.saveDeletedMessages) {
+        if (!AeroConfig.saveDeletedMessages || deleted) {
             return false;
         }
-        if (aeroDeleted || deleted) {
+        if (aeroDeleted) {
             return true;
         }
         if (messageOwner != null && AeroDeletedStore.isDeleted(currentAccount, getDialogId(), getId())) {
@@ -8966,6 +8966,9 @@ public class MessageObject {
             messageText = new SpannableStringBuilder(messageText);
         }
         final boolean hasUrls = addEntitiesToText(messageText, useManualParse);
+        if (AeroConfig.newUzbekAlphabetInChats && messageText instanceof SpannableStringBuilder) {
+            AeroTextUtils.applyNewUzbekAlphabetInPlace((SpannableStringBuilder) messageText);
+        }
         textLinksHidden = shouldHideLinks();
         if (textLinksHidden) {
             removeLinks(messageText);

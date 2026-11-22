@@ -1269,6 +1269,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         if (!ApplicationLoader.mainInterfacePaused) {
             ConnectionsManager.getInstance(currentAccount).setAppPaused(false, false);
+        if (org.telegram.messenger.AeroConfig.ghostStayOffline) {
+            MessagesController.forceAeroOfflineStatusAll(true);
+        }
         }
         if (UserConfig.getInstance(account).unacceptedTermsOfService != null) {
             showTosActivity(account, UserConfig.getInstance(account).unacceptedTermsOfService);
@@ -7268,6 +7271,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
         }
         ConnectionsManager.getInstance(currentAccount).setAppPaused(false, false);
+        if (org.telegram.messenger.AeroConfig.ghostStayOffline) {
+            MessagesController.forceAeroOfflineStatusAll(true);
+        }
         updateCurrentConnectionState(currentAccount);
         if (PhotoViewer.hasInstance() && PhotoViewer.getInstance().isVisible()) {
             PhotoViewer.getInstance().onResume();

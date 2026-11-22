@@ -421,7 +421,7 @@ public class TranslateAlert3 extends BottomSheetWithRecyclerListView {
             final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
             req.to_lang = to_lang;
 
-            if (dialogId != 0 && messageId != 0) {
+            if (dialogId != 0 && messageId != 0 && !org.telegram.messenger.AeroDeletedStore.isDeleted(currentAccount, dialogId, messageId)) {
                 req.flags |= TLObject.FLAG_0;
                 req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
                 req.id.add(messageId);

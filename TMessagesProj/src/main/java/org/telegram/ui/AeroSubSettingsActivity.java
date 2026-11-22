@@ -1,14 +1,22 @@
 package org.telegram.ui;
 
+import static org.telegram.messenger.AndroidUtilities.dp;
+
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.GradientDrawable;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -18,8 +26,7 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.AeroConfig;
-import org.telegram.messenger.AeroDeletedStore;
-import org.telegram.messenger.AeroEditHistoryStore;
+import org.telegram.messenger.AeroTextUtils;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.MessagesController;
@@ -29,12 +36,17 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.ActionBarMenu;
+import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
+import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -56,9 +68,26 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     public static final int MODE_TEXT_STYLE = 9;
     public static final int MODE_FOLDER_STYLE = 10;
     public static final int MODE_REMINDER_DELAY = 11;
+    public static final int MODE_NEW_ALPHABET = 12;
+    public static final int MODE_POSTFIX = 13;
+    public static final int MODE_AUTO_TRANSLATE = 14;
+
+    private static final int MENU_REFRESH = 1;
 
     private final int mode;
     private boolean fetchingStats = false;
+
+    // Cached custom views so reloadList() never recreates views or causes scroll/toggle flicker
+    private View statsHeaderView;
+    private View statsUsersCardView;
+    private TextView statsUsersValueView;
+    private View statsAccountsCardView;
+    private TextView statsAccountsValueView;
+    private View aboutIntroView;
+    private View alphabetPreviewView;
+    private View postfixEditorView;
+    private EditText postfixEditText;
+    private TextView postfixPreviewView;
 
     private static final String[][] LANGUAGES = {
         {"uz", "O‘zbekcha (Uzbek)", "Ўзбекча (Uzbek)"},
@@ -107,15 +136,38 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             case MODE_TRANSLATE_LANG: return AeroConfig.tr("Tarjima tili", "Таржима тили");
             case MODE_STT_LANG: return AeroConfig.tr("Ovoz → Matn tili", "Овоз → Матн тили");
             case MODE_DOUBLE_TAP: return AeroConfig.tr("Ikki marta bosganda", "Икки марта босганда");
-            case ID_TEXT_STYLE_TITLE:
             case MODE_TEXT_STYLE: return AeroConfig.tr("Matn uslubi", "Матн услуби");
             case MODE_FOLDER_STYLE: return AeroConfig.tr("Papkalar uslubi", "Папкалар услуби");
             case MODE_REMINDER_DELAY: return AeroConfig.tr("Eslatma kechikishi", "Эслатма кечикиши");
+            case MODE_NEW_ALPHABET: return AeroConfig.tr("Yangi o‘zbek alifbosi", "Янги ўзбек алифбоси");
+            case MODE_POSTFIX: return AeroConfig.tr("Avto-postfiks", "Авто-постфикс");
+            case MODE_AUTO_TRANSLATE: return AeroConfig.tr("Avto-tarjima", "Авто-таржима");
             default: return AeroConfig.tr("AeroGram haqida", "AeroGram ҳақида");
         }
     }
 
-    private static final int ID_TEXT_STYLE_TITLE = 999;
+    @Override
+    public View createView(Context context) {
+        View root = super.createView(context);
+        if (mode == MODE_STATS) {
+            ActionBarMenu menu = actionBar.createMenu();
+            menu.addItem(MENU_REFRESH, R.drawable.msg_reset);
+            actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
+                @Override
+                public void onItemClick(int id) {
+                    if (id == -1) {
+                        finishFragment();
+                    } else if (id == MENU_REFRESH) {
+                        fetchGitHubDownloadsIfNeeded(true);
+                        if (getParentActivity() != null) {
+                            Toast.makeText(getParentActivity(), AeroConfig.tr("Yangilanmoqda...", "Янгиланмоқда..."), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            });
+        }
+        return root;
+    }
 
     @Override
     public void onResume() {
@@ -127,8 +179,21 @@ public class AeroSubSettingsActivity extends UniversalFragment {
 
     private void reloadList() {
         if (listView != null && listView.adapter != null) {
-            listView.adapter.update(true);
+            listView.adapter.update(false);
         }
+    }
+
+    private static String formatSpacedInt(int value) {
+        String s = String.valueOf(Math.max(0, value));
+        StringBuilder sb = new StringBuilder();
+        int len = s.length();
+        for (int i = 0; i < len; i++) {
+            if (i > 0 && (len - i) % 3 == 0) {
+                sb.append(' ');
+            }
+            sb.append(s.charAt(i));
+        }
+        return sb.toString();
     }
 
     private void fetchGitHubDownloadsIfNeeded(boolean force) {
@@ -181,27 +246,32 @@ public class AeroSubSettingsActivity extends UniversalFragment {
                     AeroConfig.saveInt("cachedCommunityUsers", finalDownloads);
                     AeroConfig.saveLong("cachedCommunityFetchMs", AeroConfig.cachedCommunityFetchMs);
                 }
-                reloadList();
+                if (statsUsersValueView != null) {
+                    statsUsersValueView.setText(formatSpacedInt(Math.max(1, AeroConfig.cachedCommunityUsers)));
+                }
             });
         });
     }
 
-    private View createAnalyticsTopHeader(Context context) {
+    private View getOrCreateAnalyticsHeader(Context context) {
+        if (statsHeaderView != null) {
+            return statsHeaderView;
+        }
         LinearLayout wrap = new LinearLayout(context);
         wrap.setOrientation(LinearLayout.VERTICAL);
         wrap.setGravity(Gravity.CENTER_HORIZONTAL);
-        wrap.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(22), AndroidUtilities.dp(20), AndroidUtilities.dp(18));
+        wrap.setPadding(dp(20), dp(26), dp(20), dp(22));
 
         GradientDrawable circle = new GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
             new int[]{0xFF38BDF8, 0xFF0284C7, 0xFF1E3A8A}
         );
-        circle.setCornerRadius(AndroidUtilities.dp(24));
+        circle.setCornerRadius(dp(36));
 
         FrameLayout emblem = new FrameLayout(context);
         emblem.setBackground(circle);
         ImageView icon = new ImageView(context);
-        icon.setImageResource(R.drawable.msg_stats);
+        icon.setImageResource(R.drawable.ic_aerogram_monochrome);
         icon.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
         emblem.addView(icon, LayoutHelper.createFrame(38, 38, Gravity.CENTER));
         wrap.addView(emblem, LayoutHelper.createLinear(72, 72, Gravity.CENTER_HORIZONTAL));
@@ -211,7 +281,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         title.setTypeface(AndroidUtilities.bold());
         title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
         title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
-        wrap.addView(title, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 12, 0, 0));
+        wrap.addView(title, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 14, 0, 0));
 
         TextView sub = new TextView(context);
         sub.setText(AeroConfig.tr("Ilovadan foydalanish statistikasi", "Иловадан фойдаланиш статистикаси"));
@@ -219,59 +289,63 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         sub.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, getResourceProvider()));
         wrap.addView(sub, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 4, 0, 0));
 
-        return wrap;
+        statsHeaderView = wrap;
+        return statsHeaderView;
     }
 
-    private View createStatMetricCard(Context context, String label, String bigValue, String badgeText, int accentColor, View.OnClickListener onInfoClick) {
+    private View getOrCreateStatMetricCard(Context context, boolean usersCard, String label, int bigValue, String infoTitle, String infoMessage) {
+        View cached = usersCard ? statsUsersCardView : statsAccountsCardView;
+        TextView valView = usersCard ? statsUsersValueView : statsAccountsValueView;
+        if (cached != null && valView != null) {
+            valView.setText(formatSpacedInt(bigValue));
+            return cached;
+        }
+
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(AndroidUtilities.dp(18), AndroidUtilities.dp(14), AndroidUtilities.dp(18), AndroidUtilities.dp(14));
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
 
-        LinearLayout topRow = new LinearLayout(context);
-        topRow.setOrientation(LinearLayout.HORIZONTAL);
-        topRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView val = new TextView(context);
+        val.setText(formatSpacedInt(bigValue));
+        val.setTypeface(AndroidUtilities.bold());
+        val.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 28);
+        val.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
+        card.addView(val, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        LinearLayout labelRow = new LinearLayout(context);
+        labelRow.setOrientation(LinearLayout.HORIZONTAL);
+        labelRow.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView lbl = new TextView(context);
         lbl.setText(label);
-        lbl.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13.5f);
+        lbl.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14.5f);
         lbl.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, getResourceProvider()));
-        topRow.addView(lbl, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+        labelRow.addView(lbl, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         ImageView infoBtn = new ImageView(context);
         infoBtn.setImageResource(R.drawable.msg_info);
-        infoBtn.setColorFilter(new PorterDuffColorFilter(accentColor, PorterDuff.Mode.SRC_IN));
-        infoBtn.setPadding(AndroidUtilities.dp(6), AndroidUtilities.dp(4), AndroidUtilities.dp(4), AndroidUtilities.dp(4));
-        infoBtn.setOnClickListener(onInfoClick);
-        topRow.addView(infoBtn, LayoutHelper.createLinear(30, 30, Gravity.CENTER_VERTICAL));
+        infoBtn.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, getResourceProvider()), PorterDuff.Mode.SRC_IN));
+        infoBtn.setPadding(dp(6), dp(4), dp(6), dp(4));
+        infoBtn.setOnClickListener(v -> {
+            if (getParentActivity() != null) {
+                new AlertDialog.Builder(getParentActivity())
+                    .setTitle(infoTitle)
+                    .setMessage(infoMessage)
+                    .setPositiveButton("OK", null)
+                    .show();
+            }
+        });
+        labelRow.addView(infoBtn, LayoutHelper.createLinear(28, 28, Gravity.CENTER_VERTICAL, 4, 0, 0, 0));
 
-        card.addView(topRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        card.addView(labelRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 4, 0, 0));
 
-        LinearLayout valRow = new LinearLayout(context);
-        valRow.setOrientation(LinearLayout.HORIZONTAL);
-        valRow.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView val = new TextView(context);
-        val.setText(bigValue);
-        val.setTypeface(AndroidUtilities.bold());
-        val.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 25);
-        val.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
-        valRow.addView(val, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
-
-        if (!TextUtils.isEmpty(badgeText)) {
-            GradientDrawable pill = new GradientDrawable();
-            pill.setCornerRadius(AndroidUtilities.dp(8));
-            pill.setColor((accentColor & 0x00FFFFFF) | 0x22000000);
-            TextView badge = new TextView(context);
-            badge.setText(badgeText);
-            badge.setTypeface(AndroidUtilities.bold());
-            badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
-            badge.setTextColor(accentColor);
-            badge.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(4), AndroidUtilities.dp(10), AndroidUtilities.dp(4));
-            badge.setBackground(pill);
-            valRow.addView(badge);
+        if (usersCard) {
+            statsUsersCardView = card;
+            statsUsersValueView = val;
+        } else {
+            statsAccountsCardView = card;
+            statsAccountsValueView = val;
         }
-
-        card.addView(valRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 4, 0, 0));
         return card;
     }
 
@@ -310,7 +384,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
                 "Monoshift (Code)",
                 AeroConfig.tr("Chizilgan (Strike)", "Чизилган (Strike)"),
                 AeroConfig.tr("Tagchizilgan (Underline)", "Тагчизилган (Underline)"),
-                "Yashirin (Spoiler)"
+                AeroConfig.tr("Yashirin (Spoiler)", "Яширин (Spoiler)")
             };
             for (int i = 0; i < styles.length; i++) {
                 items.add(UItem.asRadio(i, styles[i]).setChecked(AeroConfig.textStyleMode == i));
@@ -329,90 +403,285 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             for (int m : mins) {
                 items.add(UItem.asRadio(m, m + AeroConfig.tr(" daqiqadan so‘ng", " дақиқадан сўнг")).setChecked(AeroConfig.unreadReminderMinutes == m));
             }
+        } else if (mode == MODE_NEW_ALPHABET) {
+            fillNewAlphabetItems(items);
+        } else if (mode == MODE_POSTFIX) {
+            fillPostfixItems(items);
+        } else if (mode == MODE_AUTO_TRANSLATE) {
+            fillAutoTranslateItems(items);
         }
     }
 
     private void fillStatsItems(ArrayList<UItem> items) {
         if (getParentActivity() == null) return;
-        items.add(UItem.asCustom(10, createAnalyticsTopHeader(getParentActivity())));
+        items.add(UItem.asCustom(10, getOrCreateAnalyticsHeader(getParentActivity())));
         items.add(UItem.asShadow(null));
 
-        int totalDownloads = Math.max(1, AeroConfig.cachedCommunityUsers);
-        String downloadsText = totalDownloads + (AeroConfig.uiCyrillic ? " та юклаш" : " ta yuklash");
-
-        items.add(UItem.asCustom(11, createStatMetricCard(
+        int totalUsers = Math.max(1, AeroConfig.cachedCommunityUsers);
+        items.add(UItem.asCustom(11, getOrCreateStatMetricCard(
             getParentActivity(),
-            AeroConfig.tr("AeroGram foydalanuvchilari (Reliz yuklashlari)", "AeroGram фойдаланувчилари (Релиз юклашлари)"),
-            downloadsText,
-            "GitHub Live",
-            0xFF0EA5E9,
-            v -> new AlertDialog.Builder(getParentActivity())
-                .setTitle(AeroConfig.tr("AeroGram foydalanuvchilari", "AeroGram фойдаланувчилари"))
-                .setMessage(AeroConfig.tr(
-                    "Bu ko‘rsatkich Bauntyme/AeroGram GitHub relizlaridan rasmiy APK yuklab olishlarning haqiqiy sonini ko‘rsatadi (hech qanday sun’iy yoki yashirin kuzatuv yo‘q).",
-                    "Бу кўрсаткич Bauntyme/AeroGram GitHub релизларидан расмий APK юклаб олишларнинг ҳақиқий сонини кўрсатади (ҳеч қандай сунъий ёки яширин кузатув йўқ)."
-                ))
-                .setPositiveButton("OK", null)
-                .show()
+            true,
+            AeroConfig.tr("Jami foydalanuvchilar", "Жами фойдаланувчилар"),
+            totalUsers,
+            AeroConfig.tr("Jami foydalanuvchilar", "Жами фойдаланувчилар"),
+            AeroConfig.tr(
+                "Bauntyme/AeroGram relizlaridan rasmiy APK yuklab olgan foydalanuvchilarning umumiy soni.",
+                "Bauntyme/AeroGram релизларидан расмий APK юклаб олган фойдаланувчиларнинг умумий сони."
+            )
         )));
+
+        items.add(UItem.asShadow(null));
 
         int activeCount = 0;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) activeCount++;
         }
-
-        items.add(UItem.asShadow(null));
-        items.add(UItem.asCustom(12, createStatMetricCard(
+        items.add(UItem.asCustom(12, getOrCreateStatMetricCard(
             getParentActivity(),
-            AeroConfig.tr("Faol akkauntlar (ushbu qurilmada)", "Фаол аккаунтлар (ушбу қурилмада)"),
-            activeCount + " / " + UserConfig.MAX_ACCOUNT_COUNT,
-            activeCount > 0 ? "ONLINE" : "OFF",
-            0xFF10B981,
-            v -> new AlertDialog.Builder(getParentActivity())
-                .setTitle(AeroConfig.tr("Faol akkauntlar", "Фаол аккаунтлар"))
-                .setMessage(AeroConfig.tr(
-                    "Qurilmangizda tizimga kirgan va faol Telegram akkauntlar soni hamda ulardagi saqlangan ma’lumotlar.",
-                    "Қурилмангизда тизимга кирган ва фаол Telegram аккаунтлар сони ҳамда улардаги сақланган маълумотлар."
-                ))
-                .setPositiveButton("OK", null)
-                .show()
+            false,
+            AeroConfig.tr("Faol akkauntlar", "Фаол аккаунтлар"),
+            activeCount,
+            AeroConfig.tr("Faol akkauntlar", "Фаол аккаунтлар"),
+            AeroConfig.tr(
+                "Ushbu qurilmada tizimga kirgan va faol ishlayotgan AeroGram akkauntlari soni.",
+                "Ушбу қурилмада тизимга кирган ва фаол ишлаётган AeroGram аккаунтлари сони."
+            )
         )));
+    }
 
-        items.add(UItem.asShadow(null));
-        items.add(UItem.asHeader(AeroConfig.tr("Qurilmadagi faol akkauntlar", "Қурилмадаги фаол аккаунтлар")));
-
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            UserConfig uc = UserConfig.getInstance(a);
-            if (!uc.isClientActivated()) continue;
-            TLRPC.User u = uc.getCurrentUser();
-            String name = u != null ? UserObject.getUserName(u) : ("Akkaunt #" + (a + 1));
-            String uname = u != null && !TextUtils.isEmpty(u.username) ? "@" + u.username : ("ID: " + uc.getClientUserId());
-            boolean isCurrent = (a == currentAccount);
-            items.add(AeroRowCell.Factory.ofNav(
-                200 + a,
-                isCurrent ? 0xFF10B981 : 0xFF64748B,
-                R.drawable.msg_groups,
-                name,
-                uname + (isCurrent ? AeroConfig.tr(" • Joriy faol sessiya", " • Жорий фаол сессия") : AeroConfig.tr(" • Bosing va almashing", " • Босинг ва алмашинг")),
-                isCurrent ? "FAOL" : "KIRISH",
-                isCurrent ? AeroRowCell.BADGE_NEW : AeroRowCell.BADGE_NONE
-            ));
+    private void fillNewAlphabetItems(ArrayList<UItem> items) {
+        if (getParentActivity() != null) {
+            items.add(UItem.asCustom(10, getOrCreateAlphabetPreview(getParentActivity())));
+            items.add(UItem.asShadow(null));
         }
-
+        items.add(AeroRowCell.Factory.ofSwitch(1, 0xFF7C3AED, R.drawable.msg_text_check,
+            AeroConfig.tr("Yangi alifboda yuborish", "Янги алифбода юбориш"),
+            AeroConfig.tr("Yozgan xabaringizda sh→ş, ch→ç, o‘→ō, g‘→ḡ almashtiradi", "Ёзган хабарингизда sh→ş, ch→ç, o‘→ō, g‘→ḡ алмаштиради"),
+            AeroConfig.newUzbekAlphabet, AeroRowCell.BADGE_AERO));
+        items.add(AeroRowCell.Factory.ofSwitch(2, 0xFF6366F1, R.drawable.msg_viewchats,
+            AeroConfig.tr("Chatlarni yangi alifboda ko‘rsatish", "Чатларни янги алифбода кўрсатиш"),
+            AeroConfig.tr("Kiruvchi va chatdagi matnlarni avtomatik ş ç ō ḡ ko‘rinishida o‘qiysiz", "Кирувчи ва чатдаги матнларни автоматик ş ç ō ḡ кўринишида ўқийсиз"),
+            AeroConfig.newUzbekAlphabetInChats, AeroRowCell.BADGE_NEW));
+        items.add(AeroRowCell.Factory.ofSwitch(3, 0xFF8B5CF6, R.drawable.msg_translate,
+            AeroConfig.tr("Interfeysda Kirill yozuvi (Lotin ↔ Кирилл)", "Интерфейсда Кирилл ёзуви (Лотин ↔ Кирилл)"),
+            AeroConfig.tr("AeroGram menyu va izohlarini kirill yoki lotin alifbosiga o‘giradi", "AeroGram меню ва изоҳларини кирилл ёки лотин алифбосига ўгиради"),
+            AeroConfig.uiCyrillic, AeroRowCell.BADGE_NONE));
         items.add(UItem.asShadow(null));
-        items.add(UItem.asHeader(AeroConfig.tr("Mahalliy faollik ko‘rsatkichlari", "Маҳаллий фаоллик кўрсаткичлари")));
-        items.add(UItem.asButton(0, R.drawable.msg_delete,
-            AeroConfig.tr("Saqlangan o‘chirilgan xabarlar", "Сақланган ўчирилган хабарлар"),
-            AeroDeletedStore.getTotalSavedCount() + " ta"));
-        items.add(UItem.asButton(0, R.drawable.msg_recent,
-            AeroConfig.tr("Saqlangan tahrir versiyalari", "Сақланган таҳрир версиялари"),
-            AeroEditHistoryStore.getTotalCount() + " ta"));
-        items.add(UItem.asButton(0, R.drawable.msg_block,
-            AeroConfig.tr("To‘silgan chet el xabarlari", "Тўсилган чет эл хабарлари"),
-            AeroConfig.statBlockedForeignCount + " ta"));
-        items.add(UItem.asButton(99, R.drawable.msg_reset,
-            AeroConfig.tr("Statistikani yangilash", "Статистикани янгилаш"),
-            fetchingStats ? "..." : "OK"));
+        items.add(AeroRowCell.Factory.ofNav(4, 0xFF0EA5E9, R.drawable.msg_text_outlined,
+            AeroConfig.tr("Matn konverteri (Lotin ↔ Кирилл / ş ç ō ḡ)", "Матн конвертери (Лотин ↔ Кирилл / ş ç ō ḡ)"),
+            AeroConfig.tr("Istalgan matnni tezkor o‘girish va nusxalash", "Исталган матнни тезкор ўгириш ва нусхалаш"),
+            AeroConfig.tr("Ochish", "Очиш"), AeroRowCell.BADGE_AERO));
+    }
+
+    private View getOrCreateAlphabetPreview(Context context) {
+        if (alphabetPreviewView != null) {
+            return alphabetPreviewView;
+        }
+        LinearLayout box = new LinearLayout(context);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        box.setPadding(dp(20), dp(20), dp(20), dp(18));
+
+        TextView big = new TextView(context);
+        big.setText("ş  ç  ō  ḡ");
+        big.setTypeface(AndroidUtilities.bold());
+        big.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 30);
+        big.setTextColor(0xFF7C3AED);
+        box.addView(big, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
+
+        TextView example = new TextView(context);
+        example.setText(AeroConfig.tr(
+            "«O‘zbekiston shahri chiroyli g‘alaba» → «Ōzbekiston şahri çiroyli ḡalaba»",
+            "«O‘zbekiston shahri chiroyli g‘alaba» → «Ōzbekiston şahri çiroyli ḡalaba»"
+        ));
+        example.setGravity(Gravity.CENTER);
+        example.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        example.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, getResourceProvider()));
+        box.addView(example, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 8, 0, 0));
+
+        alphabetPreviewView = box;
+        return alphabetPreviewView;
+    }
+
+    private void fillPostfixItems(ArrayList<UItem> items) {
+        items.add(AeroRowCell.Factory.ofSwitch(1, 0xFFA855F7, R.drawable.msg_recent,
+            AeroConfig.tr("Avto-postfiksni yoqish", "Авто-постфиксни ёқиш"),
+            AeroConfig.tr("Har bir yuborilayotgan xabar oxiriga avtomatik qo‘shiladi", "Ҳар бир юборилаётган хабар охирига автоматик қўшилади"),
+            AeroConfig.autoPostfixEnabled, AeroRowCell.BADGE_AERO));
+        items.add(UItem.asShadow(null));
+        if (getParentActivity() != null) {
+            items.add(UItem.asCustom(10, getOrCreatePostfixEditor(getParentActivity())));
+        }
+    }
+
+    private View getOrCreatePostfixEditor(Context context) {
+        if (postfixEditorView != null) {
+            if (postfixEditText != null && !TextUtils.equals(postfixEditText.getText(), AeroConfig.autoPostfixText)) {
+                postfixEditText.setText(AeroConfig.autoPostfixText);
+            }
+            if (postfixPreviewView != null) {
+                String p = TextUtils.isEmpty(AeroConfig.autoPostfixText) ? "" : (" " + AeroConfig.autoPostfixText.trim());
+                postfixPreviewView.setText(AeroConfig.tr("Namuna: «Assalomu alaykum" + p + "»", "Намуна: «Ассалому алайкум" + p + "»"));
+            }
+            return postfixEditorView;
+        }
+        LinearLayout wrap = new LinearLayout(context);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(18), dp(14), dp(18), dp(16));
+
+        TextView lbl = new TextView(context);
+        lbl.setText(AeroConfig.tr("Postfiks matni", "Постфикс матни"));
+        lbl.setTypeface(AndroidUtilities.bold());
+        lbl.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        lbl.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
+        wrap.addView(lbl);
+
+        EditText et = new EditText(context);
+        et.setText(AeroConfig.autoPostfixText);
+        et.setHint(AeroConfig.tr("Masalan: — AeroGram orqali", "Масалан: — AeroGram орқали"));
+        et.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        et.setSingleLine(true);
+        et.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        et.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
+        et.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText, getResourceProvider()));
+        wrap.addView(et, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 8));
+        postfixEditText = et;
+
+        TextView preview = new TextView(context);
+        String p = TextUtils.isEmpty(AeroConfig.autoPostfixText) ? "" : (" " + AeroConfig.autoPostfixText.trim());
+        preview.setText(AeroConfig.tr("Namuna: «Assalomu alaykum" + p + "»", "Намуна: «Ассалому алайкум" + p + "»"));
+        preview.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        preview.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, getResourceProvider()));
+        wrap.addView(preview, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
+        postfixPreviewView = preview;
+
+        GradientDrawable btnBg = new GradientDrawable();
+        btnBg.setCornerRadius(dp(10));
+        btnBg.setColor(0xFF0284C7);
+        TextView saveBtn = new TextView(context);
+        saveBtn.setText(AeroConfig.tr("Saqlash", "Сақлаш"));
+        saveBtn.setTypeface(AndroidUtilities.bold());
+        saveBtn.setTextColor(Color.WHITE);
+        saveBtn.setGravity(Gravity.CENTER);
+        saveBtn.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14.5f);
+        saveBtn.setPadding(dp(16), dp(11), dp(16), dp(11));
+        saveBtn.setBackground(btnBg);
+        saveBtn.setOnClickListener(v -> {
+            String txt = et.getText() == null ? "" : et.getText().toString();
+            AeroConfig.autoPostfixText = txt;
+            AeroConfig.saveString("autoPostfixText", txt);
+            if (!TextUtils.isEmpty(txt.trim())) {
+                AeroConfig.autoPostfixEnabled = true;
+                AeroConfig.saveBool("autoPostfixEnabled", true);
+            }
+            String p2 = TextUtils.isEmpty(txt) ? "" : (" " + txt.trim());
+            preview.setText(AeroConfig.tr("Namuna: «Assalomu alaykum" + p2 + "»", "Намуна: «Ассалому алайкум" + p2 + "»"));
+            AndroidUtilities.hideKeyboard(et);
+            reloadList();
+            Toast.makeText(context, AeroConfig.tr("Postfiks saqlandi", "Постфикс сақланди"), Toast.LENGTH_SHORT).show();
+        });
+        wrap.addView(saveBtn, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        postfixEditorView = wrap;
+        return postfixEditorView;
+    }
+
+    private void fillAutoTranslateItems(ArrayList<UItem> items) {
+        items.add(AeroRowCell.Factory.ofSwitch(1, 0xFF0284C7, R.drawable.msg_translate,
+            AeroConfig.tr("Avtomatik chat tarjimasi", "Автоматик чат таржимаси"),
+            AeroConfig.tr("Xorijiy tildagi xabarlarni avtomatik tarjima qiladi", "Хорижий тилдаги хабарларни автоматик таржима қилади"),
+            AeroConfig.autoTranslate, AeroRowCell.BADGE_NEW));
+        items.add(AeroRowCell.Factory.ofSwitch(2, 0xFF0369A1, R.drawable.msg_forward,
+            AeroConfig.tr("Yuborilayotgan xabarlarni avto-tarjima", "Юборилаётган хабарларни авто-таржима"),
+            AeroConfig.tr("Yuborishdan oldin matnni tanlangan tilga o‘giradi", "Юборишдан олдин матнни танланган тилга ўгиради"),
+            AeroConfig.autoTranslateOutgoing, AeroRowCell.BADGE_NONE));
+        items.add(AeroRowCell.Factory.ofSwitch(3, 0xFF0891B2, R.drawable.msg_text_outlined,
+            AeroConfig.tr("Yuborishda tarjimani so‘rash", "Юборишда таржимани сўраш"),
+            AeroConfig.tr("Yuborish tugmasini bosganda tarjima oynasini ko‘rsatadi", "Юбориш тугмасини босганда таржима ойнасини кўрсатади"),
+            AeroConfig.askBeforeTranslateSend, AeroRowCell.BADGE_NONE));
+        items.add(AeroRowCell.Factory.ofSwitch(4, 0xFF06B6D4, R.drawable.msg_translate,
+            AeroConfig.tr("Butun chatni tarjima qilish", "Бутун чатни таржима қилиш"),
+            AeroConfig.tr("Chat menyusida to‘liq tarjima panelini yoqadi", "Чат менюсида тўлиқ таржима панелини ёқади"),
+            AeroConfig.translateWholeChat, AeroRowCell.BADGE_NONE));
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(AeroConfig.tr("Maqsadli tarjima tili", "Мақсадли таржима тили")));
+        for (int i = 0; i < LANGUAGES.length; i++) {
+            items.add(UItem.asRadio(100 + i, AeroConfig.tr(LANGUAGES[i][1], LANGUAGES[i][2]))
+                .setChecked(LANGUAGES[i][0].equalsIgnoreCase(AeroConfig.translateTargetLang)));
+        }
+    }
+
+    private void showAlphabetConverterDialog() {
+        if (getParentActivity() == null) return;
+        Context ctx = getParentActivity();
+        LinearLayout box = new LinearLayout(ctx);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(10), dp(20), dp(6));
+
+        EditText et = new EditText(ctx);
+        et.setHint(AeroConfig.tr("Matnni kiriting...", "Матнни киритинг..."));
+        et.setMinLines(2);
+        et.setMaxLines(5);
+        et.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        et.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
+        box.addView(et);
+
+        TextView resultTv = new TextView(ctx);
+        resultTv.setTextIsSelectable(true);
+        resultTv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14.5f);
+        resultTv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        resultTv.setPadding(0, dp(10), 0, dp(6));
+        box.addView(resultTv);
+
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        TextView btnNew = new TextView(ctx);
+        btnNew.setText("ş ç ō ḡ");
+        btnNew.setTypeface(AndroidUtilities.bold());
+        btnNew.setPadding(dp(10), dp(8), dp(10), dp(8));
+        btnNew.setTextColor(0xFF7C3AED);
+        btnNew.setOnClickListener(v -> {
+            String src = et.getText() == null ? "" : et.getText().toString();
+            resultTv.setText(AeroTextUtils.convertNewUzbekAlphabet(src));
+        });
+        row.addView(btnNew);
+
+        TextView btnCyr = new TextView(ctx);
+        btnCyr.setText("→ Кирилл");
+        btnCyr.setTypeface(AndroidUtilities.bold());
+        btnCyr.setPadding(dp(10), dp(8), dp(10), dp(8));
+        btnCyr.setTextColor(0xFF0284C7);
+        btnCyr.setOnClickListener(v -> {
+            String src = et.getText() == null ? "" : et.getText().toString();
+            resultTv.setText(AeroTextUtils.convertUzbekLatinToCyrillic(src));
+        });
+        row.addView(btnCyr);
+
+        TextView btnLat = new TextView(ctx);
+        btnLat.setText("→ Lotin");
+        btnLat.setTypeface(AndroidUtilities.bold());
+        btnLat.setPadding(dp(10), dp(8), dp(10), dp(8));
+        btnLat.setTextColor(0xFF10B981);
+        btnLat.setOnClickListener(v -> {
+            String src = et.getText() == null ? "" : et.getText().toString();
+            resultTv.setText(AeroTextUtils.convertUzbekCyrillicToLatin(src));
+        });
+        row.addView(btnLat);
+
+        box.addView(row);
+
+        new AlertDialog.Builder(ctx)
+            .setTitle(AeroConfig.tr("Matn konverteri", "Матн конвертери"))
+            .setView(box)
+            .setPositiveButton(AeroConfig.tr("Natijani nusxalash", "Натижани нусхалаш"), (d, w) -> {
+                String out = resultTv.getText() == null ? "" : resultTv.getText().toString();
+                if (!TextUtils.isEmpty(out)) {
+                    AndroidUtilities.addToClipboard(out);
+                    Toast.makeText(ctx, AeroConfig.tr("Nusxalandi", "Нусхаланди"), Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setNegativeButton(AeroConfig.tr("Yopish", "Ёпиш"), null)
+            .show();
     }
 
     private void fillBotsItems(ArrayList<UItem> items) {
@@ -504,67 +773,287 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         }
     }
 
-    private static final String[][] GUIDE_ENTRIES = {
-        {"Ghost Rejimi", "Ghost Режими",
-            "YOQISH: Maxfiylik → Barcha Ghost funksiyalari.\nQANDAY ISHLAYDI: Siz xabarni o‘qisangiz ham suhbatdoshda ikki ko‘k belgi ketmaydi, «onlayn» yoki «yozmoqda» ko‘rinmaydi, hikoyalar maxfiy ko‘riladi.\nO‘CHIRISH: Ghost kalitini o‘chiring yoki chatda Ghost belgisini bosing.",
-            "ЁҚИШ: Махфийлик → Барча Ghost функциялари.\nҚАНДАЙ ИШЛАЙДИ: Сиз хабарни ўқисангиз ҳам суҳбатдошда икки кўк белги кетмайди, «онлайн» ёки «ёзмоқда» кўринмайди, ҳикоялар махфий кўрилади.\nЎЧИРИШ: Ghost калитини ўчиринг ёки чатда Ghost белгисини босинг."},
-        {"Anti-Delete (O‘chirilgan xabarlar)", "Anti-Delete (Ўчирилган хабарлар)",
-            "YOQISH: Standart yoqilgan (O‘chirilgan xabarlarni saqlash).\nQANDAY ISHLAYDI: Boshqa odam xabarni o‘chirsa ham, u chatdan yo‘qolmaydi — darhol «🗑 O‘chirilgan» yozuvi chiqadi, chat qayta ochilganda (zagruzka) va rasmlarda ham saqlanib qoladi.\nO‘CHIRISH: O‘chirilgan xabarlarni saqlash tugmasini o‘chiring.",
-            "ЁҚИШ: Стандарт ёқилган (Ўчирилган хабарларни сақлаш).\nҚАНДАЙ ИШЛАЙДИ: Бошқа одам хабарни ўчирса ҳам, у чатдан йўқолмайди — дарҳол «🗑 Ўчирилган» ёзуви чиқади, чат қайта очилганда (загрузка) ва расмларда ҳам сақланиб қолади.\nЎЧИРИШ: Ўчирилган хабарларни сақлаш тугмасини ўчиринг."},
-        {"Tahrirlar tarixi (Eski → Yangi)", "Таҳрирлар тарихи (Эски → Янги)",
-            "YOQISH: Standart yoqilgan (Tahrirlar tarixini saqlash).\nQANDAY ISHLAYDI: Xabar tahrirlanganda pufakcha ichida avval 📝 Eski matn, uning pastida ✨ Yangi matn avtomatik ko‘rsatiladi. Ustiga bosib barcha eski versiyalarni ko‘rish mumkin.\nO‘CHIRISH: Tahrirlar tarixini saqlash kalitini o‘chiring.",
-            "ЁҚИШ: Стандарт ёқилган (Таҳрирлар тарихини сақлаш).\nҚАНДАЙ ИШЛАЙДИ: Хабар таҳрирланганда пуфакча ичида аввал 📝 Эски матн, унинг пастида ✨ Янги матн автоматик кўрсатилади. Устига босиб барча эски версияларни кўриш мумкин.\nЎЧИРИШ: Таҳрирлар тарихини сақлаш калитини ўчиринг."},
-        {"Yashirin va PIN Qulflangan Chatlar", "Яширин ва ПИН Қулфланган Чатлар",
-            "YOQISH: Maxfiylik → PIN kod o‘rnatish → Chatlarni tanlash.\nQANDAY ISHLAYDI: Qulflangan chat PIN siz ochilmaydi. Yashirilgan chatlar umumiy ro‘yxatda ko‘rinmaydi.\nO‘CHIRISH: Sozlamalardan belgini yeching.",
-            "ЁҚИШ: Махфийлик → ПИН код ўрнатиш → Чатларни танлаш.\nҚАНДАЙ ИШЛАЙДИ: Қулфланган чат ПИН сиз очилмайди. Яширилган чатлар умумий рўйхатда кўринмайди.\nЎЧИРИШ: Созламалардан белгини ечинг."},
-        {"Avto-tarjima & Ovoz → Matn (STT)", "Авто-таржима & Овоз → Матн (STT)",
-            "YOQISH: Tarjima va Ovoz → Avto-tarjima / Yuborishda tarjima / Ovozdan matnga.\nQANDAY ISHLAYДИ: Kiruvchi va chiquvchi matnlar Telegram orqali tanlangan tilga o‘giriladi, ovozli xabarlar matn qilib beriladi.\nO‘CHIRISH: Kalitlarni o‘chiring.",
-            "ЁҚИШ: Таржима ва Овоз → Авто-таржима / Юборишда таржима / Овоздан матнга.\nҚАНДАЙ ИШЛАЙДИ: Кирувчи ва чиқувчи матнлар Telegram орқали танланган тилга ўгирилади, овозли хабарлар матн қилиб берилади.\nЎЧИРИШ: Калитларни ўчиринг."},
-        {"Xabar bezaklari va Double-Tap", "Хабар безаклари ва Double-Tap",
-            "YOQISH: Xabarlar → Matn uslubi / Yangi alifbo / Postfix / Double-Tap.\nQANDAY ISHLAYDI: Yuborilgan matnga Qalin, Kursiv, ❤️ yoki postfix qo‘shiladi. Xabarni ikki marta bosish amali moslanadi.\nO‘CHIRISH: Matn uslubini Oddiy ga qo‘ying.",
-            "ЁҚИШ: Хабарлар → Матн услуби / Янги алифбо / Постфикс / Double-Tap.\nҚАНДАЙ ИШЛАЙДИ: Юборилган матнга Қалин, Курсив, ❤️ ёки постфикс қўшилади. Хабарни икки марта босиш амали мосланади.\nЎЧИРИШ: Матн услубини Оддий га қўйинг."},
-        {"Papkalar, Proksi, Eslatmalar va Hikoyalar HD", "Папкалар, Прокси, Эслатмалар ва Ҳикоялар HD",
-            "YOQISH: Tarmoq, Papkalar → Papkalar uslubi, Avto-qabul, AeroGramProxy, Stories HD.\nQANDAY ISHLAYDI: Papkalar ikonkalarga o‘tadi, guruh so‘rovlari avto-qabul qilinadi, hikoyalar HD sifatda saqlanadi.\nO‘CHIRISH: Har bir bo‘limdagi kalitdan o‘chirish mumkin.",
-            "ЁҚИШ: Тармоқ, Папкалар → Папкалар услуби, Авто-қабул, AeroGramProxy, Stories HD.\nҚАНДАЙ ИШЛАЙДИ: Папкалар иконкаларга ўтади, гуруҳ сўровлари авто-қабул қилинади, ҳикоялар HD сифатда сақланади.\nЎЧИРИШ: Ҳар бир бўлимдаги калитдан ўчириш мумкин."},
-        {"Concept A Ilova Ikonkalari (6 xil)", "Concept A Илова Иконкалари (6 хил)",
-            "YOQISH: Interfeys → Ilova ikonkasi yoki Chat sozlamalari → Ilova ikonkasi.\nQANDAY ISHLAYDI: Bosh ekraningizdagi AeroGram belgisini 6 xil eksklyuziv dizaynga bepul almashtiradi.\nO‘CHIRISH: Klassik Ko‘k ikonkasini qayta tanlang.",
-            "ЁҚИШ: Интерфейс → Илова иконкаси ёки Чат созламалари → Илова иконкаси.\nҚАНДАЙ ИШЛАЙДИ: Бош экранингиздаги AeroGram белгисини 6 хил эксклюзив дизайнга бепул алмаштиради.\nЎЧИРИШ: Классик Кўк иконкасини қайта танланг."}
+    private static final class GuideEntry {
+        final int color;
+        final int icon;
+        final String latTitle, cyrTitle;
+        final String latOn, cyrOn;
+        final String latHow, cyrHow;
+        final String latOff, cyrOff;
+
+        GuideEntry(int color, int icon,
+                   String latTitle, String cyrTitle,
+                   String latOn, String cyrOn,
+                   String latHow, String cyrHow,
+                   String latOff, String cyrOff) {
+            this.color = color;
+            this.icon = icon;
+            this.latTitle = latTitle;
+            this.cyrTitle = cyrTitle;
+            this.latOn = latOn;
+            this.cyrOn = cyrOn;
+            this.latHow = latHow;
+            this.cyrHow = cyrHow;
+            this.latOff = latOff;
+            this.cyrOff = cyrOff;
+        }
+    }
+
+    private static final GuideEntry[] GUIDE_CARDS = {
+        new GuideEntry(0xFF6366F1, R.drawable.msg_stealth_locked,
+            "Ghost rejimi (Ko‘rinmaslik)", "Ghost режими (Кўринмаслик)",
+            "Sozlamalar → Ghost rejimi", "Созламалар → Ghost режими",
+            "Xabar o‘qiganda ikki ko‘k belgi ketmaydi, onlayn va «yozmoqda...» holati yashiriladi, hikoyalar maxfiy ko‘riladi.",
+            "Хабар ўқиганда икки кўк белги кетмайди, онлайн ва «ёзмоқда...» ҳолати яширилади, ҳикоялар махфий кўрилади.",
+            "Ghost kalitlarini yoki chatdagi Ghost tugmasini o‘chiring.", "Ghost калитларини ёки чатдаги Ghost тугмасини ўчиринг."),
+        new GuideEntry(0xFFEF4444, R.drawable.msg_delete,
+            "O‘chirilgan xabarlarni saqlash", "Ўчирилган хабарларни сақлаш",
+            "Standart holatda yoqilgan (Anti-Delete)", "Стандарт ҳолатда ёқилган (Anti-Delete)",
+            "Suhbatdosh xabarni o‘chirsa ham u chatda saqlanib qoladi va ustida «🗑 O‘chirilgan» yozuvi chiqadi. O‘zingiz o‘chirsangiz darhol o‘chadi.",
+            "Суҳбатдош хабарни ўчирса ҳам у чатда сақланиб қолади ва устида «🗑 Ўчирилган» ёзуви чиқади. Ўзингиз ўчирсангиз дарҳол ўчади.",
+            "AeroGram Sozlamalari → O‘chirilgan xabarlarni saqlash.", "AeroGram Созламалари → Ўчирилган хабарларни сақлаш."),
+        new GuideEntry(0xFFF97316, R.drawable.msg_recent,
+            "Tahrirlar tarixi", "Таҳрирлар тарихи",
+            "Standart holatda yoqilgan", "Стандарт ҳолатда ёқилган",
+            "Xabar tahrirlanganda avvalgi matn yuqorida, yangi matn esa pastida ko‘rinadi; ustiga bosib barcha versiyalarni ko‘rish mumkin.",
+            "Хабар таҳрирланганда аввалги матн юқорида, янги матн эса пастида кўринади; устига босиб барча версияларни кўриш мумкин.",
+            "AeroGram Sozlamalari → Tahrirlar tarixini saqlash.", "AeroGram Созламалари → Таҳрирлар тарихини сақлаш."),
+        new GuideEntry(0xFF0F766E, R.drawable.msg_pin_code,
+            "Yashirin va PIN-qulflangan chatlar", "Яширин ва ПИН-қулфланган чатлар",
+            "Maxfiylik → Chatni PIN bilan qulflash / Yashirin chatlar", "Махфийлик → Чатни ПИН билан қулфлаш / Яширин чатлар",
+            "Tanlangan chatlar PIN kodsiz ochilmaydi; yashirin chatlar esa umumiy ro‘yxatda umuman ko‘rinmaydi.",
+            "Танланган чатлар ПИН кодсиз очилмайди; яширин чатлар эса умумий рўйхатда умуман кўринмайди.",
+            "Chat tanlov ro‘yxatidan belgini olib tashlang.", "Чат танлов рўйхатидан белгини олиб ташланг."),
+        new GuideEntry(0xFFDC2626, R.drawable.passcode_check,
+            "Skreenshot va chet el himoyasi", "Скриншот ва чет эл ҳимояси",
+            "Himoya → Skreenshot himoyasi / Chet el raqamlarini bloklash", "Ҳимоя → Скриншот ҳимояси / Чет эл рақамларини блоклаш",
+            "Ilovada ekran rasmi olishni taqiqlaydi va notanish xorijiy raqamlardan kelgan spam xabarlarni avtomatik to‘sadi.",
+            "Иловада экран расми олишни тақиқлайди ва нотаниш хорижий рақамлардан келган спам хабарларни автоматик тўсади.",
+            "Himoya bo‘limidagi kalitlarni o‘chiring.", "Ҳимоя бўлимидаги калитларни ўчиринг."),
+        new GuideEntry(0xFF0284C7, R.drawable.msg_translate,
+            "Avto-tarjima (Kiruvchi va Chiquvchi)", "Авто-таржима (Кирувчи ва Чиқувчи)",
+            "Xabarlar → Avto-tarjima", "Хабарлар → Авто-таржима",
+            "Xorijiy tildagi xabarlarni o‘qishda ham, o‘z xabaringizni yuborishda ham tanlangan tilga darhol tarjima qiladi.",
+            "Хорижий тилдаги хабарларни ўқишда ҳам, ўз хабарингизни юборишда ҳам танланган тилга дарҳол таржима қилади.",
+            "Avto-tarjima bo‘limidan o‘chiring.", "Авто-таржима бўлимидан ўчиринг."),
+        new GuideEntry(0xFF2563EB, R.drawable.msg_voicechat,
+            "Ovoz → Matn (STT) & Avto-tarjima", "Овоз → Матн (STT) & Авто-таржима",
+            "Ovoz → Matn (STT)", "Овоз → Матн (STT)",
+            "Ovozli va video xabarlar ostidagi A→ belgisini bossangiz, ovozni matnga aylantiradi va xohlasangiz darhol tarjima qiladi.",
+            "Овозли ва видео хабарлар остидаги A→ белгисини боссангиз, овозни матнга айлантиради ва хоҳласангиз дарҳол таржима қилади.",
+            "Ovoz → Matn kalitini o‘chiring.", "Овоз → Матн калитини ўчиринг."),
+        new GuideEntry(0xFF7C3AED, R.drawable.msg_text_check,
+            "Yangi o‘zbek alifbosi (ş ç ō ḡ)", "Янги ўзбек алифбоси (ş ç ō ḡ)",
+            "Xabarlar → Yangi o‘zbek alifbosi", "Хабарлар → Янги ўзбек алифбоси",
+            "Yuboriladigan yoki chatdagi xabarlarda sh→ş, ch→ç, o‘→ō, g‘→ḡ shakllarini ishlatadi; tayyor Lotin ↔ Kirill konverteriga ega.",
+            "Юбориладиган ёки чатдаги хабарларда sh→ş, ch→ç, o‘→ō, g‘→ḡ шаклларини ишлатади; тайёр Лотин ↔ Кирилл конвертерига эга.",
+            "Yangi o‘zbek alifbosi bo‘limidan o‘chiring.", "Янги ўзбек алифбоси бўлимидан ўчиринг."),
+        new GuideEntry(0xFFA855F7, R.drawable.msg_text_outlined,
+            "Matn uslubi, Postfiks va ❤️ Effekti", "Матн услуби, Постфикс ва ❤️ Эффекти",
+            "Xabarlar → Matn uslubi / Avto-postfiks / Yurakcha", "Хабарлар → Матн услуби / Авто-постфикс / Юракча",
+            "Har bir xabaringizga Qalin/Kursiv uslub, avtomatik imzo (masalan: «— AeroGram orqali») yoki ❤️ belgisini qo‘shadi.",
+            "Ҳар бир хабарингизга Қалин/Курсив услуб, автоматик имзо (масалан: «— AeroGram орқали») ёки ❤️ белгисини қўшади.",
+            "Matn uslubini Oddiy ga qo‘ying yoki kalitlarni o‘chiring.", "Матн услубини Оддий га қўйинг ёки калитларни ўчиринг."),
+        new GuideEntry(0xFF3B82F6, R.drawable.menu_reply,
+            "Double-Tap, Forward va Tasdiqlashlar", "Double-Tap, Forward ва Тасдиқлашлар",
+            "Chat → Ikki marta bosganda / Forward / Qo‘ng‘iroq tasdiqlash", "Чат → Икки марта босганда / Forward / Қўнғироқ тасдиқлаш",
+            "Xabarni ikki marta bosish amalini (Reply, Copy, Translate, Reaksiya) sozlaydi, muallifsiz forward qiladi, tasodifiy qo‘ng‘iroq/stikerdan asraydi.",
+            "Хабарни икки марта босиш амалини (Reply, Copy, Translate, Реакция) созлайди, муаллифсиз forward қилади, тасодифий қўнғироқ/стикердан асрайди.",
+            "Chat bo‘limidan o‘zgartiring.", "Чат бўлимидан ўзгартиринг."),
+        new GuideEntry(0xFF10B981, R.drawable.msg_folders,
+            "Papkalar, Birinchi xabar & Avto-qabul", "Папкалар, Биринчи хабар & Авто-қабул",
+            "Interfeys & Tarmoq bo‘limlari", "Интерфейс & Тармоқ бўлимлари",
+            "Papkalar ikonkaga o‘tadi, cheksiz chat qadash (Pin), 1-xabarga sakrash va guruhga qo‘shilish so‘rovlarini avto-qabul qilish ishlaydi.",
+            "Папкалар иконкага ўтади, чексиз чат қадаш (Pin), 1-хабарга сакраш ва гуруҳга қўшилиш сўровларини авто-қабул қилиш ишлайди.",
+            "Tegishli kalitlarni o‘chiring.", "Тегишли калитларни ўчиринг."),
+        new GuideEntry(0xFFEC4899, R.drawable.msg_stories_save,
+            "Hikoyalar (HD), Kamera va AeroGramProxy", "Ҳикоялар (HD), Камера ва AeroGramProxy",
+            "Interfeys → Stories HD / AeroGramProxy / Ilova ikonkasi", "Интерфейс → Stories HD / AeroGramProxy / Илова иконкаси",
+            "Hikoyalarni HD yuklaydi va saqlaydi, galereyadagi videoni dumaloq video-xabar qilib yuboradi va 6 xil Concept A ilova ikonkasini taqdim etadi.",
+            "Ҳикояларни HD юклайди ва сақлайди, галереядаги видеони думалоқ видео-хабар қилиб юборади ва 6 хил Concept A илова иконкасини тақдим этади.",
+            "Interfeys va Tarmoq bo‘limidan o‘chiring.", "Интерфейс ва Тармоқ бўлимидан ўчиринг.")
     };
 
+    private View getOrCreateAboutIntro(Context context) {
+        if (aboutIntroView != null) {
+            return aboutIntroView;
+        }
+        LinearLayout wrap = new LinearLayout(context);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(20), dp(18), dp(20), dp(18));
+
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setCornerRadius(dp(6));
+        badgeBg.setColor(0xFF0284C7);
+        TextView badge = new TextView(context);
+        badge.setText(AeroConfig.tr("AEROGRAM NIMA?", "AEROGRAM НИМА?"));
+        badge.setTypeface(AndroidUtilities.bold());
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
+        badge.setTextColor(Color.WHITE);
+        badge.setPadding(dp(10), dp(4), dp(10), dp(4));
+        badge.setBackground(badgeBg);
+        wrap.addView(badge, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        TextView desc = new TextView(context);
+        desc.setText(AeroConfig.tr(
+            "AeroGram — Telegram bazasida yaratilgan tezkor, maxfiy va qulay mijoz. Quyida ilovadagi barcha funksiyalarni yoqish, ishlatish va o‘chirish bo‘yicha to‘liq qo‘llanma bilan tanishing.",
+            "AeroGram — Telegram базасида яратилган тезкор, махфий ва қулай мижоз. Қуйида иловадаги барча функцияларни ёқиш, ишлатиш ва ўчириш бўйича тўлиқ қўлланма билан танишинг."
+        ));
+        desc.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        desc.setLineSpacing(dp(2), 1.0f);
+        desc.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, getResourceProvider()));
+        wrap.addView(desc, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 10, 0, 0));
+
+        aboutIntroView = wrap;
+        return aboutIntroView;
+    }
+
     private void fillAboutItems(ArrayList<UItem> items) {
+        if (getParentActivity() != null) {
+            items.add(UItem.asCustom(1, getOrCreateAboutIntro(getParentActivity())));
+            items.add(UItem.asShadow(null));
+        }
+        for (int i = 0; i < GUIDE_CARDS.length; i++) {
+            UItem item = UItem.ofFactory(GuideCardFactory.class);
+            item.id = 100 + i;
+            item.object = GUIDE_CARDS[i];
+            item.checked = AeroConfig.uiCyrillic;
+            items.add(item);
+        }
         items.add(UItem.asShadow(AeroConfig.tr(
-            "Istalgan bo‘lim ustiga bosing — undan qanday foydalanish, yoqish va o‘chirish to‘liq ochiladi:",
-            "Исталган бўлим устига босинг — ундан қандай фойдаланиш, ёқиш ва ўчириш тўлиқ очилади:"
+            "Telegram ning barcha asosiy funksiyalari o‘zgarmagan — qo‘shimcha imkoniyatlarni AeroGram Sozlamalari orqali xohlagan payt boshqarishingiz mumkin.",
+            "Telegram нинг барча асосий функциялари ўзгармаган — қўшимча имкониятларни AeroGram Созламалари орқали хоҳлаган пайт бошқаришингиз мумкин."
         )));
-        for (int i = 0; i < GUIDE_ENTRIES.length; i++) {
-            items.add(AeroRowCell.Factory.ofNav(
-                i, 0xFF0284C7, R.drawable.msg_info,
-                AeroConfig.tr(GUIDE_ENTRIES[i][0], GUIDE_ENTRIES[i][1]),
-                AeroConfig.tr("Batafsil qo‘llanma (Yoqish / Ishlash / O‘chirish)", "Батафсил қўлланма (Ёқиш / Ишлаш / Ўчириш)"),
-                "", i == 0 ? AeroRowCell.BADGE_AERO : AeroRowCell.BADGE_NONE
-            ));
+    }
+
+    public static class GuideCardCell extends LinearLayout implements Theme.Colorable {
+        private final ImageView iconView;
+        private final FrameLayout iconBox;
+        private final TextView titleView;
+        private final TextView bodyView;
+        private final Theme.ResourcesProvider resourcesProvider;
+        private boolean needDivider;
+
+        public GuideCardCell(Context context, Theme.ResourcesProvider resourcesProvider) {
+            super(context);
+            this.resourcesProvider = resourcesProvider;
+            setOrientation(VERTICAL);
+            setWillNotDraw(false);
+            setPadding(dp(18), dp(14), dp(18), dp(14));
+
+            LinearLayout header = new LinearLayout(context);
+            header.setOrientation(HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+
+            iconBox = new FrameLayout(context);
+            iconView = new ImageView(context);
+            iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            iconView.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
+            iconBox.addView(iconView, LayoutHelper.createFrame(18, 18, Gravity.CENTER));
+            header.addView(iconBox, LayoutHelper.createLinear(32, 32, Gravity.CENTER_VERTICAL, 0, 0, 12, 0));
+
+            titleView = new TextView(context);
+            titleView.setTypeface(AndroidUtilities.bold());
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15.5f);
+            header.addView(titleView, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+
+            addView(header, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+            bodyView = new TextView(context);
+            bodyView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13.5f);
+            bodyView.setLineSpacing(dp(2.5f), 1.0f);
+            addView(bodyView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
+
+            updateColors();
+        }
+
+        public void bind(GuideEntry entry, boolean divider) {
+            this.needDivider = divider;
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(9));
+            bg.setColor(entry.color);
+            iconBox.setBackground(bg);
+            iconView.setImageResource(entry.icon);
+            titleView.setText(AeroConfig.tr(entry.latTitle, entry.cyrTitle));
+
+            String l1 = AeroConfig.tr("YOQISH: ", "ЁҚИШ: ");
+            String v1 = AeroConfig.tr(entry.latOn, entry.cyrOn);
+            String l2 = AeroConfig.tr("ISHLASHI: ", "ИШЛАШИ: ");
+            String v2 = AeroConfig.tr(entry.latHow, entry.cyrHow);
+            String l3 = AeroConfig.tr("O‘CHIRISH: ", "ЎЧИРИШ: ");
+            String v3 = AeroConfig.tr(entry.latOff, entry.cyrOff);
+
+            SpannableStringBuilder sb = new SpannableStringBuilder();
+            appendLabeled(sb, l1, v1 + "\n", 0xFF10B981);
+            appendLabeled(sb, l2, v2 + "\n", 0xFF0284C7);
+            appendLabeled(sb, l3, v3, 0xFFEF4444);
+            bodyView.setText(sb);
+            updateColors();
+        }
+
+        private void appendLabeled(SpannableStringBuilder sb, String label, String value, int labelColor) {
+            int start = sb.length();
+            sb.append(label);
+            sb.setSpan(new StyleSpan(android.graphics.Typeface.BOLD), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.setSpan(new ForegroundColorSpan(labelColor), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.append(value);
+        }
+
+        @Override
+        public void updateColors() {
+            titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
+            bodyView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider));
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas);
+            if (needDivider && Theme.dividerPaint != null) {
+                canvas.drawLine(dp(62), getMeasuredHeight() - 1, getMeasuredWidth(), getMeasuredHeight() - 1, Theme.dividerPaint);
+            }
+        }
+    }
+
+    public static class GuideCardFactory extends UItem.UItemFactory<GuideCardCell> {
+        static { setup(new GuideCardFactory()); }
+
+        @Override
+        public boolean isClickable() {
+            return false;
+        }
+
+        @Override
+        public GuideCardCell createView(Context context, RecyclerListView listView, int currentAccount, int classGuid, Theme.ResourcesProvider resourcesProvider) {
+            return new GuideCardCell(context, resourcesProvider);
+        }
+
+        @Override
+        public void bindView(View view, UItem item, boolean divider, UniversalAdapter adapter, UniversalRecyclerView listView) {
+            if (item.object instanceof GuideEntry) {
+                ((GuideCardCell) view).bind((GuideEntry) item.object, divider);
+            }
+        }
+
+        @Override
+        public boolean equals(UItem a, UItem b) {
+            return a.id == b.id && a.object == b.object;
+        }
+
+        @Override
+        public boolean contentsEquals(UItem a, UItem b) {
+            return a.id == b.id && a.object == b.object && a.checked == b.checked;
         }
     }
 
     @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
-        if (mode == MODE_ABOUT && item.id >= 0 && item.id < GUIDE_ENTRIES.length && getParentActivity() != null) {
-            String[] g = GUIDE_ENTRIES[item.id];
-            new AlertDialog.Builder(getParentActivity())
-                .setTitle(AeroConfig.tr(g[0], g[1]))
-                .setMessage(AeroConfig.tr(g[2], g[3]))
-                .setPositiveButton("OK", null)
-                .show();
-        } else if (mode == MODE_STATS) {
-            if (item.id == 99) {
-                fetchGitHubDownloadsIfNeeded(true);
-                Toast.makeText(getParentActivity(), AeroConfig.tr("Yangilanmoqda...", "Янгиланмоқда..."), Toast.LENGTH_SHORT).show();
-            } else if (item.id >= 200 && item.id < 200 + UserConfig.MAX_ACCOUNT_COUNT) {
-                int acc = item.id - 200;
-                if (acc != currentAccount && LaunchActivity.instance != null) {
-                    LaunchActivity.instance.switchToAccount(acc, true);
-                }
-            }
+        if (mode == MODE_ABOUT || mode == MODE_STATS) {
+            return;
         } else if (mode == MODE_BOTS) {
             String username = null;
             if (item.id >= 100 && item.id < 100 + BOTS_VIDEO.length) {
@@ -631,6 +1120,51 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             AeroConfig.unreadReminderMinutes = item.id;
             AeroConfig.saveInt("unreadReminderMinutes", item.id);
             reloadList();
+        } else if (mode == MODE_NEW_ALPHABET) {
+            if (item.id == 1) {
+                AeroConfig.newUzbekAlphabet = !AeroConfig.newUzbekAlphabet;
+                AeroConfig.saveBool("newUzbekAlphabet", AeroConfig.newUzbekAlphabet);
+                reloadList();
+            } else if (item.id == 2) {
+                AeroConfig.newUzbekAlphabetInChats = !AeroConfig.newUzbekAlphabetInChats;
+                AeroConfig.saveBool("newUzbekAlphabetInChats", AeroConfig.newUzbekAlphabetInChats);
+                reloadList();
+            } else if (item.id == 3) {
+                AeroConfig.uiCyrillic = !AeroConfig.uiCyrillic;
+                AeroConfig.saveBool("uiCyrillic", AeroConfig.uiCyrillic);
+                if (actionBar != null) actionBar.setTitle(getTitle());
+                reloadList();
+            } else if (item.id == 4) {
+                showAlphabetConverterDialog();
+            }
+        } else if (mode == MODE_POSTFIX) {
+            if (item.id == 1) {
+                AeroConfig.autoPostfixEnabled = !AeroConfig.autoPostfixEnabled;
+                AeroConfig.saveBool("autoPostfixEnabled", AeroConfig.autoPostfixEnabled);
+                reloadList();
+            }
+        } else if (mode == MODE_AUTO_TRANSLATE) {
+            if (item.id == 1) {
+                AeroConfig.autoTranslate = !AeroConfig.autoTranslate;
+                AeroConfig.saveBool("autoTranslate", AeroConfig.autoTranslate);
+                reloadList();
+            } else if (item.id == 2) {
+                AeroConfig.autoTranslateOutgoing = !AeroConfig.autoTranslateOutgoing;
+                AeroConfig.saveBool("autoTranslateOutgoing", AeroConfig.autoTranslateOutgoing);
+                reloadList();
+            } else if (item.id == 3) {
+                AeroConfig.askBeforeTranslateSend = !AeroConfig.askBeforeTranslateSend;
+                AeroConfig.saveBool("askBeforeTranslateSend", AeroConfig.askBeforeTranslateSend);
+                reloadList();
+            } else if (item.id == 4) {
+                AeroConfig.translateWholeChat = !AeroConfig.translateWholeChat;
+                AeroConfig.saveBool("translateWholeChat", AeroConfig.translateWholeChat);
+                reloadList();
+            } else if (item.id >= 100 && item.id - 100 < LANGUAGES.length) {
+                AeroConfig.translateTargetLang = LANGUAGES[item.id - 100][0];
+                AeroConfig.saveString("translateTargetLang", AeroConfig.translateTargetLang);
+                reloadList();
+            }
         }
     }
 

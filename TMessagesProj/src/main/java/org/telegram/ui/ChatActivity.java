@@ -27224,45 +27224,60 @@ public class ChatActivity extends BaseFragment implements
         }
         if (!sent && AeroConfig.saveDeletedMessages) {
             boolean refreshedAny = false;
-            HashSet<Integer> aeroIds = new HashSet<>(markAsDeletedMessages.size());
+            ArrayList<Integer> userDeletedMids = new ArrayList<>();
+            ArrayList<Integer> remoteDeletedMids = new ArrayList<>();
+            MessagesController mc = getMessagesController();
             for (int a = 0, count = markAsDeletedMessages.size(); a < count; a++) {
                 Integer mid = markAsDeletedMessages.get(a);
                 if (mid == null) continue;
-                aeroIds.add(mid);
-                MessageObject obj = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
-                    ? filteredMessagesDict.get(mid)
-                    : messagesDict[loadIndex].get(mid);
-                if (obj != null) {
-                    obj.deleted = false;
-                    obj.aeroDeleted = true;
-                    obj.resetLayout();
-                    AeroDeletedStore.markDeleted(currentAccount, obj.getDialogId(), obj.getId());
-                    refreshedAny = true;
+                if (mc.isAeroUserDeleted(dialog_id, mid)) {
+                    userDeletedMids.add(mid);
+                } else {
+                    remoteDeletedMids.add(mid);
                 }
             }
-            if (chatListView != null && !aeroIds.isEmpty()) {
-                for (int c = 0, n = chatListView.getChildCount(); c < n; c++) {
-                    View child = chatListView.getChildAt(c);
-                    if (child instanceof ChatMessageCell) {
-                        ChatMessageCell cell = (ChatMessageCell) child;
-                        MessageObject mObj = cell.getMessageObject();
-                        if (mObj != null && aeroIds.contains(mObj.getId())) {
-                            mObj.deleted = false;
-                            mObj.aeroDeleted = true;
-                            mObj.resetLayout();
-                            AeroDeletedStore.markDeleted(currentAccount, mObj.getDialogId(), mObj.getId());
-                            cell.setMessageObject(mObj, cell.getCurrentMessagesGroup(), cell.isPinnedBottom(), cell.isPinnedTop(), cell.isFirstInChat(), cell.isLastInChatList());
-                            cell.requestLayout();
-                            cell.invalidate();
-                            refreshedAny = true;
+            if (!remoteDeletedMids.isEmpty()) {
+                HashSet<Integer> aeroIds = new HashSet<>(remoteDeletedMids);
+                for (int a = 0, count = remoteDeletedMids.size(); a < count; a++) {
+                    Integer mid = remoteDeletedMids.get(a);
+                    MessageObject obj = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
+                        ? filteredMessagesDict.get(mid)
+                        : messagesDict[loadIndex].get(mid);
+                    if (obj != null) {
+                        obj.deleted = false;
+                        obj.aeroDeleted = true;
+                        obj.resetLayout();
+                        AeroDeletedStore.markDeleted(currentAccount, obj.getDialogId(), obj.getId());
+                        refreshedAny = true;
+                    }
+                }
+                if (chatListView != null && !aeroIds.isEmpty()) {
+                    for (int c = 0, n = chatListView.getChildCount(); c < n; c++) {
+                        View child = chatListView.getChildAt(c);
+                        if (child instanceof ChatMessageCell) {
+                            ChatMessageCell cell = (ChatMessageCell) child;
+                            MessageObject mObj = cell.getMessageObject();
+                            if (mObj != null && aeroIds.contains(mObj.getId())) {
+                                mObj.deleted = false;
+                                mObj.aeroDeleted = true;
+                                mObj.resetLayout();
+                                AeroDeletedStore.markDeleted(currentAccount, mObj.getDialogId(), mObj.getId());
+                                cell.setMessageObject(mObj, cell.getCurrentMessagesGroup(), cell.isPinnedBottom(), cell.isPinnedTop(), cell.isFirstInChat(), cell.isLastInChatList());
+                                cell.requestLayout();
+                                cell.invalidate();
+                                refreshedAny = true;
+                            }
                         }
                     }
                 }
+                if (refreshedAny) {
+                    updateVisibleRows();
+                }
             }
-            if (refreshedAny) {
-                updateVisibleRows();
+            if (userDeletedMids.isEmpty()) {
+                return;
             }
-            return;
+            markAsDeletedMessages = userDeletedMids;
         }
         if (replyingMessageObject != null && markAsDeletedMessages.contains(replyingMessageObject.getId())) {
             replyingMessageObject = null;

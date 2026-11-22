@@ -53,6 +53,7 @@ public class AeroConfig {
 
     public static int textStyleMode = STYLE_NONE;
     public static boolean newUzbekAlphabet = false;
+    public static boolean newUzbekAlphabetInChats = false;
     public static boolean autoPostfixEnabled = false;
     public static String autoPostfixText = "";
     public static boolean heartEffect = false;
@@ -152,6 +153,7 @@ public class AeroConfig {
 
         textStyleMode = prefs.getInt("textStyleMode", STYLE_NONE);
         newUzbekAlphabet = prefs.getBoolean("newUzbekAlphabet", false);
+        newUzbekAlphabetInChats = prefs.getBoolean("newUzbekAlphabetInChats", false);
         autoPostfixEnabled = prefs.getBoolean("autoPostfixEnabled", false);
         autoPostfixText = prefs.getString("autoPostfixText", "");
         heartEffect = prefs.getBoolean("heartEffect", false);
@@ -336,6 +338,7 @@ public class AeroConfig {
 
         textStyleMode = STYLE_NONE;
         newUzbekAlphabet = false;
+        newUzbekAlphabetInChats = false;
         autoPostfixEnabled = false;
         autoPostfixText = "";
         heartEffect = false;

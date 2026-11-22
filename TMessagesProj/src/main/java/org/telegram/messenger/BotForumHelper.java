@@ -276,6 +276,9 @@ public class BotForumHelper extends BaseController {
                     new BotForumTextDraftDeleteNotification(userId, topicId, message.localMessageId));
             }
 
+            if (AeroConfig.ghostDontSendTyping) {
+                return;
+            }
             final TLRPC.TL_sendMessageStopDraftAction action = new TLRPC.TL_sendMessageStopDraftAction();
             action.random_id = randomId;
 

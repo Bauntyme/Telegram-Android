@@ -7410,11 +7410,6 @@ public class ChatActivityEnterView extends FrameLayout implements
                     emojiView.hideSearchKeyboard();
                 }
             }
-            if (allowConfirmFinal && showConfirmAlert(() -> {
-                sendMessageInternal(notify, scheduleDate, scheduleRepeatPeriod, payStars, false);
-            })) {
-                return;
-            }
             dismissSendPreviewSent = true;
             if (videoToSendMessageObject != null) {
                 delegate.needStartRecordVideo(4, notify, scheduleDate, 0, voiceOnce ? 0x7FFFFFFF : 0, effectId, payStars);
