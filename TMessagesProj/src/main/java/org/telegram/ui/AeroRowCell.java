@@ -206,7 +206,8 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
     }
 
     public static class Factory extends UItem.UItemFactory<AeroRowCell> {
-        static { setup(new Factory()); }
+        private static final Factory INSTANCE = new Factory();
+        static { setup(INSTANCE); }
 
         @Override
         public AeroRowCell createView(Context context, RecyclerListView listView, int currentAccount, int classGuid, Theme.ResourcesProvider resourcesProvider) {
@@ -236,6 +237,7 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         }
 
         public static UItem ofSwitch(int id, int color, int icon, CharSequence title, CharSequence subtitle, boolean checked, int badge) {
+            setup(INSTANCE);
             UItem item = UItem.ofFactory(Factory.class);
             item.id = id;
             item.intValue = color;
@@ -248,6 +250,7 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         }
 
         public static UItem ofNav(int id, int color, int icon, CharSequence title, CharSequence subtitle, CharSequence value, int badge) {
+            setup(INSTANCE);
             UItem item = UItem.ofFactory(Factory.class);
             item.id = id;
             item.intValue = color;

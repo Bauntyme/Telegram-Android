@@ -529,8 +529,8 @@ public class AeroSettingsActivity extends UniversalFragment {
             "", AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.3.0 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
-            "AeroGram v1.3.0 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
+            "AeroGram v1.3.1 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
+            "AeroGram v1.3.1 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
         )));
     }
 

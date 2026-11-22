@@ -148,6 +148,16 @@ public class AeroSubSettingsActivity extends UniversalFragment {
 
     @Override
     public View createView(Context context) {
+        statsHeaderView = null;
+        statsUsersCardView = null;
+        statsUsersValueView = null;
+        statsAccountsCardView = null;
+        statsAccountsValueView = null;
+        aboutIntroView = null;
+        alphabetPreviewView = null;
+        postfixEditorView = null;
+        postfixEditText = null;
+        postfixPreviewView = null;
         View root = super.createView(context);
         if (mode == MODE_STATS) {
             ActionBarMenu menu = actionBar.createMenu();
@@ -914,11 +924,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             items.add(UItem.asShadow(null));
         }
         for (int i = 0; i < GUIDE_CARDS.length; i++) {
-            UItem item = UItem.ofFactory(GuideCardFactory.class);
-            item.id = 100 + i;
-            item.object = GUIDE_CARDS[i];
-            item.checked = AeroConfig.uiCyrillic;
-            items.add(item);
+            items.add(GuideCardFactory.ofGuide(100 + i, GUIDE_CARDS[i], AeroConfig.uiCyrillic));
         }
         items.add(UItem.asShadow(AeroConfig.tr(
             "Telegram ning barcha asosiy funksiyalari o‘zgarmagan — qo‘shimcha imkoniyatlarni AeroGram Sozlamalari orqali xohlagan payt boshqarishingiz mumkin.",
@@ -1020,7 +1026,17 @@ public class AeroSubSettingsActivity extends UniversalFragment {
     }
 
     public static class GuideCardFactory extends UItem.UItemFactory<GuideCardCell> {
-        static { setup(new GuideCardFactory()); }
+        private static final GuideCardFactory INSTANCE = new GuideCardFactory();
+        static { setup(INSTANCE); }
+
+        public static UItem ofGuide(int id, GuideEntry entry, boolean cyrillic) {
+            setup(INSTANCE);
+            UItem item = UItem.ofFactory(GuideCardFactory.class);
+            item.id = id;
+            item.object = entry;
+            item.checked = cyrillic;
+            return item;
+        }
 
         @Override
         public boolean isClickable() {
