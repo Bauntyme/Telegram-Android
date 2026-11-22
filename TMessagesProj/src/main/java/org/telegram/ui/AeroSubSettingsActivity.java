@@ -926,7 +926,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         badgeBg.setCornerRadius(dp(6));
         badgeBg.setColor(0xFF0284C7);
         TextView badge = new TextView(context);
-        badge.setText("AEROGRAM v1.4.0 • BUILD 1006");
+        badge.setText("AEROGRAM v1.4.1 • BUILD 1007");
         badge.setTypeface(AndroidUtilities.bold());
         badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
         badge.setTextColor(Color.WHITE);
@@ -1012,11 +1012,11 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         items.add(AeroRowCell.Factory.ofNav(203, 0xFF6366F1, R.drawable.msg_share,
             "GitHub Relizlar",
             "https://github.com/Bauntyme/AeroGram/releases",
-            "v1.4.0", AeroRowCell.BADGE_NONE));
+            "v1.4.1", AeroRowCell.BADGE_NONE));
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.4.0 (Build 1006) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
-            "AeroGram v1.4.0 (Build 1006) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
+            "AeroGram v1.4.1 (Build 1007) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
+            "AeroGram v1.4.1 (Build 1007) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
         )));
     }
 

@@ -5112,7 +5112,7 @@ public class ChatActivity extends BaseFragment implements
                         if (
                             chatMode != 0 && chatMode != MODE_QUICK_REPLIES && chatMode != MODE_SUGGESTIONS && (chatMode != MODE_SAVED || threadMessageId != getUserConfig().getClientUserId()) ||
                             threadMessageObjects != null && threadMessageObjects.contains(message) ||
-                            getMessageType(message) == 1 && (message.getDialogId() == mergeDialogId || message.needDrawBluredPreview()) ||
+                            getMessageType(message) == 1 && (message.getDialogId() == mergeDialogId || message.needDrawBluredPreview() && !AeroConfig.saveOnceMedia) ||
                             currentEncryptedChat == null && message.getId() < 0 ||
                             currentChat != null && ChatObject.isForum(currentChat) && !allowReplyOnOpenTopic ||
                             hasTextSelection() ||
@@ -46799,11 +46799,6 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_EDIT_HISTORY);
                     icons.add(R.drawable.msg_recent);
                 }
-                if (AeroConfig.saveOnceMedia && selectedObject != null && (selectedObject.isSecretMedia() || selectedObject.isVoiceOnce() || selectedObject.isRoundOnce())) {
-                    items.add(AeroConfig.tr("Saved Messages ga saqlash", "Saved Messages га сақлаш"));
-                    options.add(OPTION_SAVE_TO_SAVED_ONCE);
-                    icons.add(R.drawable.msg_saved);
-                }
                 if (ChatObject.isMonoForum(currentChat) && selectedObject.getGroupId() == 0 && selectedObjectGroup == null && message != null && message.messageOwner != null && message.messageOwner.suggested_post == null && message.messageOwner.action == null) {
                     items.add(LocaleController.getString(R.string.EditOfferAdd));
                     options.add(OPTION_SUGGESTION_ADD_OFFER);
@@ -47305,6 +47300,12 @@ public class ChatActivity extends BaseFragment implements
             items.add(getString(R.string.WelcomeMessageRevert));
             options.add(OPTION_WELCOME_REVERT);
             icons.add(R.drawable.outline_revert_24);
+        }
+
+        if (AeroConfig.saveOnceMedia && selectedObject != null && (selectedObject.isSecretMedia() || selectedObject.isVoiceOnce() || selectedObject.isRoundOnce())) {
+            items.add(0, AeroConfig.tr("Saved Messages ga saqlash", "Saved Messages га сақлаш"));
+            options.add(0, OPTION_SAVE_TO_SAVED_ONCE);
+            icons.add(0, R.drawable.msg_saved);
         }
     }
 

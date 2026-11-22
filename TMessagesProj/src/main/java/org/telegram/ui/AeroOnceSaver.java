@@ -272,7 +272,7 @@ public final class AeroOnceSaver {
             final String destPath = destFile.getAbsolutePath();
             final String caption = buildCaption(msg, senderName, isOnce);
 
-            AndroidUtilities.runOnUIThread(() -> sendPlainFileToSaved(currentAccount, fragment, msg, destFile, destPath, caption, selfId));
+            AndroidUtilities.runOnUIThread(() -> sendPlainFileToSaved(currentAccount, fragment, msg, destFile, destPath, caption, senderName, isOnce, selfId));
         });
     }
 
@@ -292,7 +292,7 @@ public final class AeroOnceSaver {
         }
     }
 
-    private static void sendPlainFileToSaved(int currentAccount, BaseFragment fragment, MessageObject msg, File destFile, String destPath, String caption, long selfId) {
+    private static void sendPlainFileToSaved(int currentAccount, BaseFragment fragment, MessageObject msg, File destFile, String destPath, String caption, String senderName, boolean isOnce, long selfId) {
         try {
             AccountInstance accountInstance = AccountInstance.getInstance(currentAccount);
             if (msg.isPhoto()) {
@@ -302,6 +302,15 @@ public final class AeroOnceSaver {
                     0, null, true, 0, 0, null
                 );
             } else if (msg.isRoundVideo() || msg.isRoundOnce()) {
+                if (!TextUtils.isEmpty(senderName)) {
+                    String roundLabel = "👇 " + (isOnce
+                        ? AeroConfig.tr("1-martalik dumaloq video", "1-марталик думалоқ видео")
+                        : AeroConfig.tr("Dumaloq video", "Думалоқ видео"))
+                        + " • " + senderName;
+                    SendMessagesHelper.getInstance(currentAccount).sendMessage(
+                        SendMessagesHelper.SendMessageParams.of(roundLabel, selfId)
+                    );
+                }
                 VideoEditedInfo roundInfo = SendMessagesHelper.createAeroRoundVideoSettings(destPath);
                 SendMessagesHelper.prepareSendingVideo(
                     accountInstance, destPath, roundInfo, null, null, selfId,
@@ -407,25 +416,59 @@ public final class AeroOnceSaver {
 
     private static String resolveSenderName(int currentAccount, MessageObject msg) {
         try {
+            StringBuilder sb = new StringBuilder();
+            MessagesController mc = MessagesController.getInstance(currentAccount);
             long senderId = msg.getSenderId();
             if (senderId > 0) {
-                TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(senderId);
+                TLRPC.User user = mc.getUser(senderId);
                 if (user != null) {
-                    return UserObject.getUserName(user);
+                    sb.append(UserObject.getUserName(user));
+                    String uname = UserObject.getPublicUsername(user);
+                    if (!TextUtils.isEmpty(uname)) {
+                        sb.append(" (@").append(uname).append(")");
+                    } else {
+                        sb.append(" (ID: ").append(senderId).append(")");
+                    }
+                } else {
+                    sb.append("ID: ").append(senderId);
                 }
             } else if (senderId < 0) {
-                TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-senderId);
+                TLRPC.Chat chat = mc.getChat(-senderId);
                 if (chat != null && !TextUtils.isEmpty(chat.title)) {
-                    return chat.title;
+                    sb.append(chat.title);
+                    if (!TextUtils.isEmpty(chat.username)) {
+                        sb.append(" (@").append(chat.username).append(")");
+                    }
+                } else {
+                    sb.append("Chat ID: ").append(-senderId);
                 }
             }
+
             long did = msg.getDialogId();
-            if (DialogObject.isUserDialog(did)) {
-                TLRPC.User u = MessagesController.getInstance(currentAccount).getUser(did);
+            if (sb.length() == 0 && DialogObject.isUserDialog(did)) {
+                TLRPC.User u = mc.getUser(did);
                 if (u != null) {
-                    return UserObject.getUserName(u);
+                    sb.append(UserObject.getUserName(u));
+                    String uname = UserObject.getPublicUsername(u);
+                    if (!TextUtils.isEmpty(uname)) {
+                        sb.append(" (@").append(uname).append(")");
+                    } else {
+                        sb.append(" (ID: ").append(did).append(")");
+                    }
+                }
+            } else if (DialogObject.isChatDialog(did) && did != senderId) {
+                TLRPC.Chat grp = mc.getChat(-did);
+                if (grp != null && !TextUtils.isEmpty(grp.title)) {
+                    if (sb.length() > 0) {
+                        sb.append(" • ");
+                    }
+                    sb.append(grp.title);
+                    if (!TextUtils.isEmpty(grp.username)) {
+                        sb.append(" (@").append(grp.username).append(")");
+                    }
                 }
             }
+            return sb.toString();
         } catch (Exception ignore) {}
         return "";
     }
