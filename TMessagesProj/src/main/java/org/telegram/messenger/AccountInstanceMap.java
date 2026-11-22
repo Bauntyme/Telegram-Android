@@ -4,12 +4,14 @@ import android.util.SparseBooleanArray;
 import android.util.SparseIntArray;
 import android.util.SparseLongArray;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Thread-safe dynamic per-account instance holder with lock-free reads and per-slot synchronized creation.
  */
-public final class AccountInstanceMap<T> {
+public final class AccountInstanceMap<T> implements Iterable<T> {
 
     public interface IntFactory<T> {
         T create(int account);
@@ -103,6 +105,36 @@ public final class AccountInstanceMap<T> {
         } else {
             arr.set(num, value);
         }
+    }
+
+    /** Removes the instance at {@code num} only if it still references {@code expected}. */
+    public boolean removeIfMatch(int num, T expected) {
+        if (num < 0) {
+            return false;
+        }
+        Object lock = getLock(num);
+        synchronized (lock) {
+            AtomicReferenceArray<Object> arr = items;
+            if (num < arr.length() && arr.get(num) == expected) {
+                arr.set(num, null);
+                return true;
+            }
+            return false;
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Iterator<T> iterator() {
+        AtomicReferenceArray<Object> arr = items;
+        ArrayList<T> snapshot = new ArrayList<>(arr.length());
+        for (int i = 0; i < arr.length(); i++) {
+            T item = (T) arr.get(i);
+            if (item != null) {
+                snapshot.add(item);
+            }
+        }
+        return snapshot.iterator();
     }
 
     public static final class BoolArray {

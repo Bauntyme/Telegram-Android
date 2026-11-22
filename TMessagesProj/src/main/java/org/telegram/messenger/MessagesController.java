@@ -193,13 +193,14 @@ public class MessagesController extends BaseController implements NotificationCe
     public int stealthModeFuture;
     public int stealthModePast;
     public int stealthModeCooldown;
-    public StoriesController storiesController;
-    public SavedMessagesController savedMessagesController;
-    public UnconfirmedAuthController unconfirmedAuthController;
+    public volatile StoriesController storiesController;
+    public volatile SavedMessagesController savedMessagesController;
+    public volatile UnconfirmedAuthController unconfirmedAuthController;
     private boolean hasArchivedChats;
     private boolean hasStories;
     public long storiesChangelogUserId = 777000;
-    private ChannelBoostsController channelBoostsControler;
+    private volatile ChannelBoostsController channelBoostsControler;
+    private final Object subControllerLock = new Object();
     public long giveawayAddPeersMax = 10;
     public long giveawayPeriodMax = 7;
     public long giveawayCountriesMax = 10;
@@ -226,7 +227,7 @@ public class MessagesController extends BaseController implements NotificationCe
         if (channelBoostsControler != null) {
             return channelBoostsControler;
         }
-        synchronized (lockObjects[currentAccount]) {
+        synchronized (subControllerLock) {
             if (channelBoostsControler != null) {
                 return channelBoostsControler;
             }
@@ -24059,7 +24060,7 @@ public class MessagesController extends BaseController implements NotificationCe
         if (storiesController != null) {
             return storiesController;
         }
-        synchronized (lockObjects[currentAccount]) {
+        synchronized (subControllerLock) {
             if (storiesController != null) {
                 return storiesController;
             }
@@ -24072,7 +24073,7 @@ public class MessagesController extends BaseController implements NotificationCe
         if (savedMessagesController != null) {
             return savedMessagesController;
         }
-        synchronized (lockObjects[currentAccount]) {
+        synchronized (subControllerLock) {
             if (savedMessagesController != null) {
                 return savedMessagesController;
             }
@@ -24085,7 +24086,7 @@ public class MessagesController extends BaseController implements NotificationCe
         if (unconfirmedAuthController != null) {
             return unconfirmedAuthController;
         }
-        synchronized (lockObjects[currentAccount]) {
+        synchronized (subControllerLock) {
             if (unconfirmedAuthController != null) {
                 return unconfirmedAuthController;
             }

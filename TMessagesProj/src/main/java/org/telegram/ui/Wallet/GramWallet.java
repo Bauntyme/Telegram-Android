@@ -551,7 +551,7 @@ public class GramWallet implements GramWalletStreaming.IGramWalletStreamingSubsc
     }
 
     public static void cleanup(int currentAccount) {
-        final GramWallet localInstance = Instance[currentAccount];
+        final GramWallet localInstance = Instance.getIfExists(currentAccount);
         if (localInstance != null) {
             localInstance.reset();
         }
@@ -575,11 +575,7 @@ public class GramWallet implements GramWalletStreaming.IGramWalletStreamingSubsc
             streaming = null;
         }
         AndroidUtilities.cancelRunOnUIThread(refreshStreamingHistory);
-        synchronized (GramWallet.class) {
-            if (Instance[currentAccount] == this) {
-                Instance[currentAccount] = null;
-            }
-        }
+        Instance.removeIfMatch(currentAccount, this);
     }
 
     private int lastListenToken = 0;
