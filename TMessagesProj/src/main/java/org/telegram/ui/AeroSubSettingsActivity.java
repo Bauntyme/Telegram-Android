@@ -997,10 +997,10 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             AeroConfig.tr("AeroGram Analitika", "AeroGram Аналитика"),
             AeroConfig.tr("Saqlangan o‘chirilganlar: " + AeroDeletedStore.getTotalSavedCount()
                 + " • Tahrirlar: " + AeroEditHistoryStore.getTotalCount()
-                + " • Ghost bloklar: " + AeroConfig.statBlockedReads,
+                + " • Spam bloklar: " + AeroConfig.statBlockedForeignCount,
                 "Сақланган ўчирилганлар: " + AeroDeletedStore.getTotalSavedCount()
                 + " • Таҳрирлар: " + AeroEditHistoryStore.getTotalCount()
-                + " • Ghost блоклар: " + AeroConfig.statBlockedReads),
+                + " • Спам блоклар: " + AeroConfig.statBlockedForeignCount),
             AeroConfig.tr("Batafsil", "Батафсил"), AeroRowCell.BADGE_AERO));
 
         items.add(UItem.asShadow(null));
