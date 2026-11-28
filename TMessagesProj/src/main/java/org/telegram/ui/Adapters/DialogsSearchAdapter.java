@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLitePreparedStatement;
+import org.telegram.messenger.AeroConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
@@ -283,7 +284,25 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         }
     }
 
+    private boolean isAeroStealthHidden(Object obj) {
+        if (AeroConfig.hiddenDialogIds.isEmpty() || AeroConfig.hiddenChatsUnlocked || obj == null) {
+            return false;
+        }
+        long did = 0;
+        if (obj instanceof TLRPC.User) {
+            did = ((TLRPC.User) obj).id;
+        } else if (obj instanceof TLRPC.Chat) {
+            did = -((TLRPC.Chat) obj).id;
+        } else if (obj instanceof TLRPC.EncryptedChat) {
+            did = DialogObject.makeEncryptedDialogId(((TLRPC.EncryptedChat) obj).id);
+        }
+        return did != 0 && AeroConfig.isDialogHidden(did);
+    }
+
     private boolean filter(Object obj) {
+        if (isAeroStealthHidden(obj)) {
+            return false;
+        }
         if (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT) {
             return true;
         }
@@ -2350,10 +2369,11 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
             filteredRecentSearchObjects.clear();
             final int count = recentSearchObjects.size();
             for (int i = 0; i < count; ++i) {
-                if (delegate != null && delegate.getSearchForumDialogId() == recentSearchObjects.get(i).did || !filter(recentSearchObjects.get(i).object)) {
+                RecentSearchObject r = recentSearchObjects.get(i);
+                if (r == null || (!AeroConfig.hiddenChatsUnlocked && AeroConfig.isDialogHidden(r.did)) || (delegate != null && delegate.getSearchForumDialogId() == r.did) || !filter(r.object)) {
                     continue;
                 }
-                filteredRecentSearchObjects.add(recentSearchObjects.get(i));
+                filteredRecentSearchObjects.add(r);
             }
             return;
         }
@@ -2364,7 +2384,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
             if (obj == null || obj.object == null) {
                 continue;
             }
-            if (delegate != null && delegate.getSearchForumDialogId() == obj.did || !filter(recentSearchObjects.get(i).object)) {
+            if ((!AeroConfig.hiddenChatsUnlocked && AeroConfig.isDialogHidden(obj.did)) || (delegate != null && delegate.getSearchForumDialogId() == obj.did) || !filter(obj.object)) {
                 continue;
             }
             String title = null, username = null;

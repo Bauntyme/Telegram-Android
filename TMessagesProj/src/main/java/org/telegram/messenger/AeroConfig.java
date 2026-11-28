@@ -28,6 +28,7 @@ public class AeroConfig {
     public static boolean chatLockEnabled = false;
     public static String chatLockPin = "";
     public static boolean hiddenChatsUnlocked = false;
+    public static boolean stealthVaultMode = true;
     public static final Set<Long> lockedDialogIds = new HashSet<>();
     public static final Set<Long> hiddenDialogIds = new HashSet<>();
     public static final Set<Long> tempUnlockedDialogIds = new HashSet<>();
@@ -140,6 +141,7 @@ public class AeroConfig {
 
         chatLockEnabled = prefs.getBoolean("chatLockEnabled", false);
         chatLockPin = prefs.getString("chatLockPin", "");
+        stealthVaultMode = prefs.getBoolean("stealthVaultMode", true);
         loadLongSet("lockedDialogIds", lockedDialogIds);
         loadLongSet("hiddenDialogIds", hiddenDialogIds);
 
@@ -278,6 +280,10 @@ public class AeroConfig {
         return hiddenDialogIds.contains(dialogId);
     }
 
+    public static boolean isStealthVaultHiddenFromSettings() {
+        return stealthVaultMode && !hiddenDialogIds.isEmpty() && !TextUtils.isEmpty(chatLockPin);
+    }
+
     public static void setDialogHidden(long dialogId, boolean hidden) {
         if (hidden) {
             hiddenDialogIds.add(dialogId);
@@ -325,6 +331,7 @@ public class AeroConfig {
         chatLockEnabled = false;
         chatLockPin = "";
         hiddenChatsUnlocked = false;
+        stealthVaultMode = true;
         lockedDialogIds.clear();
         hiddenDialogIds.clear();
         tempUnlockedDialogIds.clear();
@@ -394,6 +401,7 @@ public class AeroConfig {
                 .putBoolean("saveStoriesHd", true)
                 .putBoolean("showGhostButtonInChats", true)
                 .putBoolean("lightThemeBrandAccent", true)
+                .putBoolean("stealthVaultMode", true)
                 .putBoolean("recommendedFoldersEnabled", true)
                 .putBoolean("unreadReminderSound", true)
                 .putBoolean("uiCyrillic", keepCyr)

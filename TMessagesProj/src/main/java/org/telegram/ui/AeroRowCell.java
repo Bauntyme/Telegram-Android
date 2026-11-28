@@ -52,6 +52,7 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
     private final GradientDrawable badgeBg;
     private final TextView subtitleView;
     private final TextView valueView;
+    private final GradientDrawable valueBg;
     private final ImageView chevronView;
     private final Switch switchView;
 
@@ -63,10 +64,10 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         this.resourcesProvider = resourcesProvider;
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
-        setPadding(dp(16), dp(8), dp(16), dp(8));
+        setPadding(dp(18), dp(11), dp(16), dp(11));
 
         iconBg = new GradientDrawable();
-        iconBg.setCornerRadius(dp(9));
+        iconBg.setCornerRadius(dp(11));
 
         iconBox = new FrameLayout(context);
         iconBox.setBackground(iconBg);
@@ -74,7 +75,7 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         iconView = new ImageView(context);
         iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         iconView.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        iconBox.addView(iconView, LayoutHelper.createFrame(18, 18, Gravity.CENTER));
+        iconBox.addView(iconView, LayoutHelper.createFrame(20, 20, Gravity.CENTER));
 
         textColumn = new LinearLayout(context);
         textColumn.setOrientation(VERTICAL);
@@ -91,13 +92,13 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         titleRow.addView(titleView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 1f));
 
         badgeBg = new GradientDrawable();
-        badgeBg.setCornerRadius(dp(5));
+        badgeBg.setCornerRadius(dp(6));
 
         badgeView = new TextView(context);
         badgeView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 9.5f);
         badgeView.setTypeface(AndroidUtilities.bold());
         badgeView.setTextColor(Color.WHITE);
-        badgeView.setPadding(dp(5), dp(1.5f), dp(5), dp(1.5f));
+        badgeView.setPadding(dp(6), dp(2), dp(6), dp(2));
         badgeView.setBackground(badgeBg);
         badgeView.setVisibility(GONE);
         titleRow.addView(badgeView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 0));
@@ -108,11 +109,18 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         subtitleView = new TextView(context);
         subtitleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.5f);
         subtitleView.setMaxLines(2);
+        subtitleView.setLineSpacing(dp(1.5f), 1.0f);
         subtitleView.setEllipsize(TextUtils.TruncateAt.END);
-        textColumn.addView(subtitleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
+        textColumn.addView(subtitleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2.5f, 0, 0));
+
+        valueBg = new GradientDrawable();
+        valueBg.setCornerRadius(dp(8));
 
         valueView = new TextView(context);
-        valueView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14.5f);
+        valueView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.5f);
+        valueView.setTypeface(AndroidUtilities.bold());
+        valueView.setPadding(dp(8), dp(3.5f), dp(8), dp(3.5f));
+        valueView.setBackground(valueBg);
         valueView.setMaxLines(1);
         valueView.setEllipsize(TextUtils.TruncateAt.END);
         valueView.setVisibility(GONE);
@@ -128,7 +136,7 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
         switchView.setClickable(false);
         switchView.setVisibility(GONE);
 
-        addView(iconBox, LayoutHelper.createLinear(30, 30, Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
+        addView(iconBox, LayoutHelper.createLinear(36, 36, Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
         addView(textColumn, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 0, 0, 10, 0));
         addView(valueView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 6, 0));
         addView(chevronView, LayoutHelper.createLinear(16, 16, Gravity.CENTER_VERTICAL));
@@ -183,7 +191,8 @@ public class AeroRowCell extends LinearLayout implements Theme.Colorable {
     public void updateColors() {
         titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
         subtitleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider));
-        valueView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider));
+        valueView.setTextColor(Theme.isCurrentThemeDark() ? 0xFF7DD3FC : 0xFF0284C7);
+        valueBg.setColor(Theme.isCurrentThemeDark() ? 0x1F38BDF8 : 0x160EA5E9);
         chevronView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider), PorterDuff.Mode.SRC_IN));
     }
 

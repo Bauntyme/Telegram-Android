@@ -853,11 +853,11 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             "Хабар таҳрирланганда аввалги матн юқорида, янги матн эса пастида кўринади; хабарни босиб «Таҳрирлар тарихи» менюси орқали барча эски версияларни кўриш ва нусхалаш мумкин.",
             "AeroGram Sozlamalari → Tahrirlar tarixini saqlash.", "AeroGram Созламалари → Таҳрирлар тарихини сақлаш."),
         new GuideEntry(0xFF0F766E, R.drawable.msg_pin_code,
-            "Yashirin va PIN-qulflangan chatlar", "Яширин ва ПИН-қулфланган чатлар",
-            "Himoya → AeroGram PIN kodini sozlash / Qulflangan & Yashirin chatlar", "Ҳимоя → AeroGram ПИН кодини созлаш / Қулфланган & Яширин чатлар",
-            "4 xonali PIN kod o‘rnating. Tanlangan chatlar PIN kodsiz ochilmaydi; yashirin chatlar esa umumiy ro‘yxatda umuman ko‘rinmaydi (vaqtincha ochish uchun PIN kiriting).",
-            "4 хонали ПИН код ўрнатинг. Танланган чатлар ПИН кодсиз очилмайди; яширин чатлар эса умумий рўйхатда умуман кўринмайди (вақтинча очиш учун ПИН киритинг).",
-            "Chat tanlov ro‘yxatidan belgini olib tashlang.", "Чат танлов рўйхатидан белгини олиб ташланг."),
+            "Maxfiy Chatlar Seyfi (Stealth) va PIN-qulf", "Махфий Чатлар Сейфи (Stealth) ва ПИН-қулф",
+            "Bosh ekranda «AeroGram» yozuvini bosib turing yoki Qidiruvga PIN kodingizni kiriting", "Бош экранда «AeroGram» ёзувини босиб туринг ёки Қидирувга ПИН кодингизни киритинг",
+            "Chatni bosib turib «Maxfiy seyfga yashirish»ni bosing. Yashirilgan chatlar ro‘yxatda ham, Qidiruvda ham ko‘rinmaydi! Seyfni ochish uchun bosh sahifada AeroGram logosini bosib turing yoki Qidiruvga PIN kodingizni yozing.",
+            "Чатни босиб туриб «Махфий сейфга яшириш»ни босинг. Яширилган чатлар рўйхатда ҳам, Қидирувда ҳам кўринмайди! Сейфни очиш учун бош саҳифада AeroGram логосини босиб туринг ёки Қидирувга ПИН кодингизни ёзинг.",
+            "Seyf ichida chatni bosib turib «Seyfdan chiqarish»ni tanlang.", "Сейф ичида чатни босиб туриб «Сейфдан чиқариш»ни танланг."),
         new GuideEntry(0xFFDC2626, R.drawable.passcode_check,
             "Skreenshot va chet el raqamlari himoyasi", "Скриншот ва чет эл рақамлари ҳимояси",
             "Himoya → Skreenshot himoyasi / Chet el raqamlarini bloklash", "Ҳимоя → Скриншот ҳимояси / Чет эл рақамларини блоклаш",
@@ -933,7 +933,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         badgeBg.setCornerRadius(dp(6));
         badgeBg.setColor(0xFF0284C7);
         TextView badge = new TextView(context);
-        badge.setText("AEROGRAM v1.4.2 • BUILD 1008");
+        badge.setText("AEROGRAM v1.5.0 • BUILD 1009");
         badge.setTypeface(AndroidUtilities.bold());
         badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
         badge.setTextColor(Color.WHITE);
@@ -1014,16 +1014,16 @@ public class AeroSubSettingsActivity extends UniversalFragment {
         items.add(UItem.asHeader(AeroConfig.tr("Rasmiy havolalar", "Расмий ҳаволалар")));
         items.add(AeroRowCell.Factory.ofNav(202, 0xFF0284C7, R.drawable.msg_info,
             AeroConfig.tr("Rasmiy veb-sayt", "Расмий веб-сайт"),
-            "https://aerogram-itz8.onrender.com/",
+            "https://aerogram.website/",
             AeroConfig.tr("Ochish", "Очиш"), AeroRowCell.BADGE_NONE));
         items.add(AeroRowCell.Factory.ofNav(203, 0xFF6366F1, R.drawable.msg_share,
             "GitHub Relizlar",
             "https://github.com/Bauntyme/AeroGram/releases",
-            "v1.4.2", AeroRowCell.BADGE_NONE));
+            "v1.5.0", AeroRowCell.BADGE_NONE));
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.4.2 (Build 1008) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
-            "AeroGram v1.4.2 (Build 1008) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
+            "AeroGram v1.5.0 (Build 1009) • Telegram Android ochiq manbali loyihasi asosida tuzilgan.",
+            "AeroGram v1.5.0 (Build 1009) • Telegram Android очиқ манбали лойиҳаси асосида тузилган."
         )));
     }
 
@@ -1185,7 +1185,7 @@ public class AeroSubSettingsActivity extends UniversalFragment {
             } else if (item.id == 201) {
                 presentFragment(new AeroSubSettingsActivity(MODE_STATS));
             } else if (item.id == 202 && getParentActivity() != null) {
-                Browser.openUrl(getParentActivity(), "https://aerogram-itz8.onrender.com/");
+                Browser.openUrl(getParentActivity(), "https://aerogram.website/");
             } else if (item.id == 203 && getParentActivity() != null) {
                 Browser.openUrl(getParentActivity(), "https://github.com/Bauntyme/AeroGram/releases");
             }

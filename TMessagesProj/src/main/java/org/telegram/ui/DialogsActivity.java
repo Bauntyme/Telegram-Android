@@ -3329,6 +3329,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             @Override
             public void onTextChanged(EditText editText) {
                 String text = editText.getText().toString();
+                if (initialDialogsType == DIALOGS_TYPE_DEFAULT && !TextUtils.isEmpty(AeroConfig.chatLockPin) && TextUtils.equals(text.trim(), AeroConfig.chatLockPin)) {
+                    editText.getText().clear();
+                    AndroidUtilities.hideKeyboard(editText);
+                    editText.clearFocus();
+                    if (fragmentSearchFieldWatcher != null) {
+                        fragmentSearchFieldWatcher.toggleSearch(false);
+                    }
+                    closeSearch();
+                    presentFragment(new AeroHiddenVaultActivity());
+                    return;
+                }
                 if (!text.isEmpty() || (searchViewPager != null && searchViewPager.dialogsSearchAdapter != null && searchViewPager.dialogsSearchAdapter.hasRecentSearch()) || searchFiltersWasShowed || hasStories) {
                     searchWas = true;
                     if (!searchIsShowed) {
@@ -3470,6 +3481,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 scrollToTop(true, true);
             }
         });
+        if (initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && folderId == 0 && communityId == 0) {
+            actionBar.setLongClickable(true);
+            actionBar.setOnLongClickListener(v -> {
+                try {
+                    v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
+                } catch (Exception ignore) {}
+                openAeroHiddenVault();
+                return true;
+            });
+        }
 
         if (
             (initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect || initialDialogsType == DIALOGS_TYPE_FORWARD) &&
@@ -8761,6 +8782,43 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             previewMenu[0].addView(muteItem);
         }
 
+        if (!isCommunityCell && initialDialogsType == DIALOGS_TYPE_DEFAULT && !DialogObject.isFolderDialogId(dialogId)) {
+            boolean alreadyHidden = AeroConfig.isDialogHidden(dialogId);
+            ActionBarMenuSubItem aeroHideItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
+            aeroHideItem.setTextAndIcon(
+                alreadyHidden ? AeroConfig.tr("Seyfdan chiqarish", "Сейфдан чиқариш") : AeroConfig.tr("Maxfiy seyfga yashirish", "Махфий сейфга яшириш"),
+                R.drawable.msg_secret
+            );
+            aeroHideItem.setMinimumWidth(160);
+            aeroHideItem.setOnClickListener(e -> {
+                finishPreviewFragment();
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (getParentActivity() == null) return;
+                    if (!AeroConfig.isDialogHidden(dialogId) && TextUtils.isEmpty(AeroConfig.chatLockPin)) {
+                        AeroUiHelper.showSetPinDialog(getParentActivity(), () -> {
+                            AeroConfig.setDialogHidden(dialogId, true);
+                            NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+                            BulletinFactory.of(DialogsActivity.this).createSimpleBulletin(
+                                R.raw.contact_check,
+                                AeroConfig.tr("Chat maxfiy seyfga yashirildi — ochish uchun AeroGram logosini bosib turing", "Чат махфий сейфга яширилди — очиш учун AeroGram логосини босиб туринг")
+                            ).show();
+                        });
+                    } else {
+                        boolean nextHidden = !AeroConfig.isDialogHidden(dialogId);
+                        AeroConfig.setDialogHidden(dialogId, nextHidden);
+                        NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+                        BulletinFactory.of(DialogsActivity.this).createSimpleBulletin(
+                            R.raw.contact_check,
+                            nextHidden
+                                ? AeroConfig.tr("Chat maxfiy seyfga yashirildi", "Чат махфий сейфга яширилди")
+                                : AeroConfig.tr("Chat umumiy ro‘yxatga qaytarildi", "Чат умумий рўйхатга қайтарилди")
+                        ).show();
+                    }
+                }, 120);
+            });
+            previewMenu[0].addView(aeroHideItem);
+        }
+
         if (!isCommunityCell) {
             ActionBarMenuSubItem deleteItem = new ActionBarMenuSubItem(getParentActivity(), false, true);
             deleteItem.setIconColor(getThemedColor(Theme.key_text_RedRegular));
@@ -10074,6 +10132,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         updateCounters(false);
         selectedDialogsCountTextView.setNumber(selectedDialogs.size(), updateAnimated);
+    }
+
+    private void openAeroHiddenVault() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        if (TextUtils.isEmpty(AeroConfig.chatLockPin)) {
+            AeroUiHelper.showSetPinDialog(getParentActivity(), () -> presentFragment(new AeroHiddenVaultActivity()));
+        } else {
+            AeroUiHelper.promptPinDialog(getParentActivity(), AeroConfig.tr("Maxfiy Chatlar Seyfi", "Махфий Чатлар Сейфи"), () -> presentFragment(new AeroHiddenVaultActivity()));
+        }
     }
 
     private void closeSearch() {

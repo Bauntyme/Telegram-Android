@@ -1,10 +1,20 @@
 package org.telegram.ui;
 
+import static org.telegram.messenger.AndroidUtilities.dp;
+
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.telegram.messenger.AeroConfig;
@@ -21,6 +31,8 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
@@ -33,6 +45,15 @@ public class AeroSettingsActivity extends UniversalFragment {
     private static final int MENU_SEARCH = 1;
     private static final int MENU_SCRIPT = 2;
     private static final int MENU_SHARE = 3;
+
+    private static final int ID_HERO_BANNER = 1001;
+    private static final int ID_CATEGORY_BAR = 1002;
+
+    private static final int CAT_ALL = 0;
+    private static final int CAT_PRIVACY = 1;
+    private static final int CAT_MESSAGES = 2;
+    private static final int CAT_VOICE_TRANSLATE = 3;
+    private static final int CAT_APPEARANCE = 4;
 
     // Header & Accounts
     private static final int ID_ABOUT = 2;
@@ -114,7 +135,19 @@ public class AeroSettingsActivity extends UniversalFragment {
 
     private String searchQuery = "";
     private boolean searching = false;
+    private int selectedCategory = CAT_ALL;
     private ActionBarMenuItem scriptItem;
+
+    private LinearLayout heroBannerView;
+    private TextView heroSubView;
+    private TextView heroGhostPill;
+    private TextView heroAccPill;
+    private TextView heroSavedPill;
+    private TextView heroGuideBtn;
+    private TextView heroStatsBtn;
+    private LinearLayout categoryBarContainer;
+    private HorizontalScrollView categoryScrollView;
+    private final TextView[] categoryChips = new TextView[5];
 
     @Override
     protected CharSequence getTitle() {
@@ -192,6 +225,201 @@ public class AeroSettingsActivity extends UniversalFragment {
         }
     }
 
+    private void openVaultFromSettings() {
+        if (getParentActivity() == null) return;
+        if (TextUtils.isEmpty(AeroConfig.chatLockPin)) {
+            AeroUiHelper.showSetPinDialog(getParentActivity(), () -> presentFragment(new AeroHiddenVaultActivity()));
+        } else {
+            AeroUiHelper.promptPinDialog(getParentActivity(), AeroConfig.tr("Maxfiy Chatlar Seyfi", "Махфий Чатлар Сейфи"), () -> presentFragment(new AeroHiddenVaultActivity()));
+        }
+    }
+
+    private View getOrCreateHeroBanner(Context context, int activeAccounts) {
+        if (heroBannerView == null) {
+            LinearLayout outer = new LinearLayout(context);
+            outer.setOrientation(LinearLayout.VERTICAL);
+            outer.setPadding(dp(14), dp(10), dp(14), dp(6));
+
+            LinearLayout card = new LinearLayout(context);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(18), dp(16), dp(18), dp(16));
+
+            GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{0xFF0B1220, 0xFF0369A1, 0xFF0EA5E9}
+            );
+            bg.setCornerRadius(dp(20));
+            card.setBackground(bg);
+            card.setLongClickable(true);
+            card.setOnLongClickListener(v -> {
+                try {
+                    v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
+                } catch (Exception ignore) {}
+                openVaultFromSettings();
+                return true;
+            });
+
+            LinearLayout top = new LinearLayout(context);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView brand = new TextView(context);
+            brand.setText("AeroGram Studio");
+            brand.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18.5f);
+            brand.setTypeface(AndroidUtilities.bold());
+            brand.setTextColor(Color.WHITE);
+            top.addView(brand, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+
+            TextView ver = new TextView(context);
+            ver.setText("v1.5.0");
+            ver.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11.5f);
+            ver.setTypeface(AndroidUtilities.bold());
+            ver.setTextColor(Color.WHITE);
+            GradientDrawable verBg = new GradientDrawable();
+            verBg.setCornerRadius(dp(99));
+            verBg.setColor(0x33FFFFFF);
+            ver.setBackground(verBg);
+            ver.setPadding(dp(10), dp(4), dp(10), dp(4));
+            top.addView(ver);
+            card.addView(top);
+
+            heroSubView = new TextView(context);
+            heroSubView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.8f);
+            heroSubView.setTextColor(0xDDFFFFFF);
+            card.addView(heroSubView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 4, 0, 12));
+
+            LinearLayout statsRow = new LinearLayout(context);
+            statsRow.setOrientation(LinearLayout.HORIZONTAL);
+            heroGhostPill = makeGlassStatPill(context);
+            heroAccPill = makeGlassStatPill(context);
+            heroSavedPill = makeGlassStatPill(context);
+            statsRow.addView(heroGhostPill, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 8, 0));
+            statsRow.addView(heroAccPill, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 8, 0));
+            statsRow.addView(heroSavedPill, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+            card.addView(statsRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
+
+            LinearLayout btnRow = new LinearLayout(context);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
+            heroGuideBtn = makeHeroActionBtn(context, true);
+            heroGuideBtn.setOnClickListener(v -> presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_GUIDE)));
+            heroStatsBtn = makeHeroActionBtn(context, false);
+            heroStatsBtn.setOnClickListener(v -> presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_STATS)));
+            btnRow.addView(heroGuideBtn, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, 0, 0, 8, 0));
+            btnRow.addView(heroStatsBtn, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+            card.addView(btnRow);
+
+            outer.addView(card, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            heroBannerView = outer;
+        }
+        heroSubView.setText(AeroConfig.tr(
+            "Maxfiylik, Ghost rejimi va zamonaviy boshqaruv markazi",
+            "Махфийлик, Ghost режими ва замонавий бошқарув маркази"
+        ));
+        boolean ghostOn = AeroConfig.isAnyGhostActive();
+        heroGhostPill.setText(ghostOn ? "Ghost: ON" : "Ghost: OFF");
+        heroAccPill.setText(AeroConfig.tr("Akkauntlar: ", "Аккаунтлар: ") + activeAccounts + "/∞");
+        int savedTotal = AeroDeletedStore.getTotalSavedCount() + AeroEditHistoryStore.getTotalCount();
+        heroSavedPill.setText(AeroConfig.tr("Saqlangan: ", "Сақланган: ") + savedTotal);
+        heroGuideBtn.setText(AeroConfig.tr("Qo‘llanma", "Қўлланма"));
+        heroStatsBtn.setText(AeroConfig.tr("Analitika", "Аналитика"));
+        return heroBannerView;
+    }
+
+    private TextView makeGlassStatPill(Context context) {
+        TextView tv = new TextView(context);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11.2f);
+        tv.setTypeface(AndroidUtilities.bold());
+        tv.setTextColor(Color.WHITE);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(10));
+        bg.setColor(0x28FFFFFF);
+        tv.setBackground(bg);
+        tv.setPadding(dp(9), dp(5), dp(9), dp(5));
+        return tv;
+    }
+
+    private TextView makeHeroActionBtn(Context context, boolean primary) {
+        TextView tv = new TextView(context);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        tv.setTypeface(AndroidUtilities.bold());
+        tv.setGravity(Gravity.CENTER);
+        tv.setTextColor(primary ? 0xFF0369A1 : Color.WHITE);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(12));
+        bg.setColor(primary ? Color.WHITE : 0x2BFFFFFF);
+        tv.setBackground(bg);
+        tv.setPadding(dp(12), dp(9), dp(12), dp(9));
+        return tv;
+    }
+
+    private View getOrCreateCategoryBar(Context context) {
+        if (categoryBarContainer == null) {
+            LinearLayout wrap = new LinearLayout(context);
+            wrap.setOrientation(LinearLayout.VERTICAL);
+            wrap.setPadding(0, dp(4), 0, dp(6));
+
+            categoryScrollView = new HorizontalScrollView(context);
+            categoryScrollView.setHorizontalScrollBarEnabled(false);
+
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(dp(14), dp(2), dp(14), dp(2));
+
+            for (int i = 0; i < categoryChips.length; i++) {
+                final int cat = i;
+                TextView chip = new TextView(context);
+                chip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.8f);
+                chip.setTypeface(AndroidUtilities.bold());
+                chip.setPadding(dp(14), dp(7), dp(14), dp(7));
+                chip.setOnClickListener(v -> {
+                    if (selectedCategory != cat) {
+                        selectedCategory = cat;
+                        updateCategoryChips();
+                        reloadList();
+                    }
+                });
+                categoryChips[i] = chip;
+                row.addView(chip, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, i == categoryChips.length - 1 ? 0 : 8, 0));
+            }
+            categoryScrollView.addView(row);
+            wrap.addView(categoryScrollView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            categoryBarContainer = wrap;
+        }
+        updateCategoryChips();
+        return categoryBarContainer;
+    }
+
+    private void updateCategoryChips() {
+        String[] labels = new String[]{
+            AeroConfig.tr("Barchasi", "Барчаси"),
+            AeroConfig.tr("Ghost & Himoya", "Ghost & Ҳимоя"),
+            AeroConfig.tr("Xabarlar", "Хабарлар"),
+            AeroConfig.tr("Ovoz & Tarjima", "Овоз & Таржима"),
+            AeroConfig.tr("Ko‘rinish", "Кўриниш")
+        };
+        boolean dark = Theme.isCurrentThemeDark();
+        for (int i = 0; i < categoryChips.length; i++) {
+            TextView chip = categoryChips[i];
+            if (chip == null) continue;
+            chip.setText(labels[i]);
+            boolean active = (selectedCategory == i);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(99));
+            if (active) {
+                bg.setColor(0xFF0EA5E9);
+                chip.setTextColor(Color.WHITE);
+            } else {
+                bg.setColor(dark ? 0xFF1E293B : 0xFFE2E8F0);
+                chip.setTextColor(dark ? 0xFFCBD5E1 : 0xFF334155);
+            }
+            chip.setBackground(bg);
+        }
+    }
+
+    private boolean showCategory(int cat) {
+        return searching || selectedCategory == CAT_ALL || selectedCategory == cat;
+    }
+
     private boolean matches(String t1, String t2) {
         if (!searching || TextUtils.isEmpty(searchQuery)) {
             return true;
@@ -226,28 +454,36 @@ public class AeroSettingsActivity extends UniversalFragment {
             }
         }
 
-        addNavIfMatches(items, ID_ABOUT, 0xFF0284C7, R.drawable.msg_info,
-            "AeroGram haqida", "AeroGram ҳақида",
-            "Ilova versiyasi (v1.4.2), statistika va rasmiy havolalar", "Илова версияси (v1.4.2), статистика ва расмий ҳаволалар",
-            "v1.4.2", AeroRowCell.BADGE_NONE);
-        addNavIfMatches(items, ID_GUIDE, 0xFF0EA5E9, R.drawable.msg_help,
-            "AeroGram Qo‘llanmasi", "AeroGram Қўлланмаси",
-            "Barcha funksiyalarni yoqish, ishlatish va o‘chirish yo‘riqnomasi", "Барча функцияларни ёқиш, ишлатиш ва ўчириш йўриқномаси",
-            AeroConfig.tr("To‘liq", "Тўлиқ"), AeroRowCell.BADGE_NEW);
+        if (!searching && getParentActivity() != null) {
+            items.add(UItem.asCustom(ID_HERO_BANNER, getOrCreateHeroBanner(getParentActivity(), activeAccounts)));
+            items.add(UItem.asCustom(ID_CATEGORY_BAR, getOrCreateCategoryBar(getParentActivity())));
+        }
 
-        items.add(UItem.asShadow(null));
+        if (showCategory(CAT_APPEARANCE)) {
+            addNavIfMatches(items, ID_ABOUT, 0xFF0284C7, R.drawable.msg_info,
+                "AeroGram haqida", "AeroGram ҳақида",
+                "Ilova versiyasi (v1.5.0), statistika va rasmiy havolalar", "Илова версияси (v1.5.0), статистика ва расмий ҳаволалар",
+                "v1.5.0", AeroRowCell.BADGE_NONE);
+            addNavIfMatches(items, ID_GUIDE, 0xFF0EA5E9, R.drawable.msg_help,
+                "AeroGram Qo‘llanmasi", "AeroGram Қўлланмаси",
+                "Barcha funksiyalarni yoqish, ishlatish va o‘chirish yo‘riqnomasi", "Барча функцияларни ёқиш, ишлатиш ва ўчириш йўриқномаси",
+                AeroConfig.tr("To‘liq", "Тўлиқ"), AeroRowCell.BADGE_NEW);
 
-        items.add(UItem.asHeader(AeroConfig.tr("Akkauntlar", "Аккаунтлар")));
-        addNavIfMatches(items, ID_ACCOUNTS, 0xFF10B981, R.drawable.msg_groups,
-            "Barcha akkauntlar", "Барча аккаунтлар",
-            "Faol: " + activeAccounts + " ta • Cheksiz akkaunt ulash mumkin (∞)",
-            "Фаол: " + activeAccounts + " та • Чексиз аккаунт улаш мумкин (∞)",
-            activeAccounts + " / ∞", AeroRowCell.BADGE_NONE);
+            items.add(UItem.asShadow(null));
 
-        items.add(UItem.asShadow(null));
+            items.add(UItem.asHeader(AeroConfig.tr("Akkauntlar", "Аккаунтлар")));
+            addNavIfMatches(items, ID_ACCOUNTS, 0xFF10B981, R.drawable.msg_groups,
+                "Barcha akkauntlar", "Барча аккаунтлар",
+                "Faol: " + activeAccounts + " ta • Cheksiz akkaunt ulash mumkin (∞)",
+                "Фаол: " + activeAccounts + " та • Чексиз аккаунт улаш мумкин (∞)",
+                activeAccounts + " / ∞", AeroRowCell.BADGE_NONE);
 
-        // 1. Ghost Mode
-        items.add(UItem.asHeader(AeroConfig.tr("Ghost rejimi", "Ghost режими")));
+            items.add(UItem.asShadow(null));
+        }
+
+        if (showCategory(CAT_PRIVACY)) {
+            // 1. Ghost Mode
+            items.add(UItem.asHeader(AeroConfig.tr("Ghost rejimi", "Ghost режими")));
         addSwitchIfMatches(items, ID_GHOST_MASTER, 0xFF6366F1, R.drawable.msg_stealth_locked,
             "Barcha Ghost funksiyalari", "Барча Ghost функциялари",
             "O‘qish, onlayn, yozish va story ko‘rishlarini birga yashiradi", "Ўқиш, онлайн, ёзиш ва story кўришларини бирга яширади",
@@ -313,22 +549,29 @@ public class AeroSettingsActivity extends UniversalFragment {
             AeroConfig.lockedDialogIds.size() + AeroConfig.tr(" ta chat PIN bilan yopilgan", " та чат ПИН билан ёпилган"),
             AeroConfig.lockedDialogIds.size() + " та чат ПИН билан ёпилган",
             String.valueOf(AeroConfig.lockedDialogIds.size()), AeroRowCell.BADGE_NONE);
-        addNavIfMatches(items, ID_HIDDEN_CHATS, 0xFF059669, R.drawable.msg_secret,
-            "Yashirin chatlar", "Яширин чатлар",
-            AeroConfig.hiddenDialogIds.size() + AeroConfig.tr(" ta chat ro‘yxatdan yashirilgan", " та чат рўйхатдан яширилган"),
-            AeroConfig.hiddenDialogIds.size() + " та чат рўйхатдан яширилган",
-            AeroConfig.hiddenChatsUnlocked ? AeroConfig.tr("Ochiq", "Очиқ") : String.valueOf(AeroConfig.hiddenDialogIds.size()), AeroRowCell.BADGE_NONE);
+        if (!AeroConfig.isStealthVaultHiddenFromSettings()) {
+            addNavIfMatches(items, ID_HIDDEN_CHATS, 0xFF059669, R.drawable.msg_secret,
+                "Maxfiy Chatlar Seyfi", "Махфий Чатлар Сейфи",
+                "Chatlarni yashirish va boshqarish (keyinchalik logo bosib turib ochiladi)",
+                "Чатларни яшириш ва бошқариш (кейинчалик лого босиб туриб очилади)",
+                AeroConfig.tr("Seyf", "Сейф"), AeroRowCell.BADGE_NEW);
+        }
 
         items.add(UItem.asShadow(null));
+        }
 
+        if (showCategory(CAT_MESSAGES) || showCategory(CAT_VOICE_TRANSLATE)) {
         // 3. Xabarlar va Tarjima (with NovaGram > sub-pages)
         items.add(UItem.asHeader(AeroConfig.tr("Xabarlar va Tarjima", "Хабарлар ва Таржима")));
+        if (showCategory(CAT_VOICE_TRANSLATE)) {
         addNavIfMatches(items, ID_AUTO_TRANSLATE_PAGE, 0xFF0284C7, R.drawable.msg_translate,
             "Avto-tarjima", "Авто-таржима",
             "Kiruvchi, chiquvchi tarjima va maqsadli tilni sozlash", "Кирувчи, чиқувчи таржима ва мақсадли тилни созлаш",
             (AeroConfig.autoTranslate || AeroConfig.autoTranslateOutgoing ? AeroConfig.tr("Yoqilgan", "Ёқилган") : AeroConfig.tr("O‘chiq", "Ўчиқ"))
                 + " • " + AeroConfig.translateTargetLang.toUpperCase(Locale.US),
             AeroRowCell.BADGE_NEW);
+        }
+        if (showCategory(CAT_MESSAGES)) {
         addNavIfMatches(items, ID_NEW_ALPHABET_PAGE, 0xFF7C3AED, R.drawable.msg_text_check,
             "Yangi o‘zbek alifbosi (ş ç ō ḡ)", "Янги ўзбек алифбоси (ş ç ō ḡ)",
             "Yuborish, chatlarda ko‘rsatish va Lotin ↔ Kirill konverteri", "Юбориш, чатларда кўрсатиш ва Лотин ↔ Кирилл конвертери",
@@ -368,9 +611,12 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Ikki marta bosganda amal", "Икки марта босганда амал",
             "Xabarni ikki marta bosganda nima qilish", "Хабарни икки марта босганда нима қилиш",
             doubleTapLabel(AeroConfig.doubleTapAction), AeroRowCell.BADGE_NEW);
+        }
 
         items.add(UItem.asShadow(null));
+        }
 
+        if (showCategory(CAT_VOICE_TRANSLATE)) {
         // 4. Ovoz → Matn (STT)
         items.add(UItem.asHeader(AeroConfig.tr("Ovoz → Matn (STT)", "Овоз → Матн (STT)")));
         addSwitchIfMatches(items, ID_VOICE_TO_TEXT, 0xFF2563EB, R.drawable.msg_voicechat,
@@ -387,7 +633,9 @@ public class AeroSettingsActivity extends UniversalFragment {
             AeroConfig.autoTranslateVoice, AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(null));
+        }
 
+        if (showCategory(CAT_MESSAGES)) {
         // 5. Chat va Qo‘ng‘iroqlar
         items.add(UItem.asHeader(AeroConfig.tr("Chat va Qo‘ng‘iroqlar", "Чат ва Қўнғироқлар")));
         addSwitchIfMatches(items, ID_CONFIRM_CALL, 0xFF22C55E, R.drawable.msg_calls,
@@ -424,7 +672,9 @@ public class AeroSettingsActivity extends UniversalFragment {
             AeroConfig.showGhostButtonInChats, AeroRowCell.BADGE_NONE);
 
         items.add(UItem.asShadow(null));
+        }
 
+        if (showCategory(CAT_APPEARANCE)) {
         // 6. Tarmoq, Papkalar va Eslatmalar
         items.add(UItem.asHeader(AeroConfig.tr("Tarmoq, Papkalar va Eslatmalar", "Тармоқ, Папкалар ва Эслатмалар")));
         addNavIfMatches(items, ID_AERO_PROXY, 0xFF0EA5E9, R.drawable.proxy_check,
@@ -539,10 +789,11 @@ public class AeroSettingsActivity extends UniversalFragment {
             "Sozlamalarni standart holatga qaytarish", "Созламаларни стандарт ҳолатга қайтариш",
             "Barcha AeroGram parametrlarini tiklaydi", "Барча AeroGram параметрларини тиклайди",
             "", AeroRowCell.BADGE_NONE);
+        }
 
         items.add(UItem.asShadow(AeroConfig.tr(
-            "AeroGram v1.4.2 • Istalgan sozlamani bosib turib uning havolasini nusxalashingiz mumkin.",
-            "AeroGram v1.4.2 • Исталган созламани босиб туриб унинг ҳаволасини нусхалашингиз мумкин."
+            "AeroGram v1.5.0 • Istalgan sozlamani bosib turib havolasini nusxalashingiz yoki yuqori kartani bosib turib Maxfiy Seyfni ochishingiz mumkin.",
+            "AeroGram v1.5.0 • Исталган созламани босиб туриб ҳаволасини нусхалашингиз ёки юқори картани босиб туриб Махфий Сейфни очишингиз мумкин."
         )));
     }
 
@@ -675,15 +926,7 @@ public class AeroSettingsActivity extends UniversalFragment {
                 }
                 break;
             case ID_HIDDEN_CHATS:
-                if (AeroConfig.hiddenDialogIds.isEmpty()) {
-                    presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_HIDDEN_CHATS));
-                } else if (getParentActivity() != null) {
-                    AeroUiHelper.promptPinDialog(getParentActivity(), AeroConfig.tr("Yashirin chatlarni boshqarish", "Яширин чатларни бошқариш"), () -> {
-                        AeroConfig.hiddenChatsUnlocked = true;
-                        NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
-                        presentFragment(new AeroSubSettingsActivity(AeroSubSettingsActivity.MODE_HIDDEN_CHATS));
-                    });
-                }
+                openVaultFromSettings();
                 break;
 
             case ID_AUTO_TRANSLATE_PAGE:
@@ -955,7 +1198,7 @@ public class AeroSettingsActivity extends UniversalFragment {
     }
 
     private void shareSettingsLink() {
-        String link = "https://aerogram.website/download.html";
+        String link = "https://aerogram.website/";
         AndroidUtilities.addToClipboard(link);
         if (getParentActivity() != null) {
             try {
